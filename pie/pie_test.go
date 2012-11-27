@@ -50,6 +50,15 @@ var cases = []TestCase{
 			},
 		},
 	},
+	TestCase{
+		Name: "ignore-symlink",
+		Rule: []pie.Rule{
+			&pie.ReplaceAll{
+				Target: regexp.MustCompile("hello"),
+				Repl:   []byte("goodbye"),
+			},
+		},
+	},
 }
 
 func (t TestCase) dir(last string) string {
@@ -76,6 +85,9 @@ func (t TestCase) Compare(dir string) (bool, error) {
 		afterDir,
 		func(path string, info os.FileInfo, err error) error {
 			if info.IsDir() {
+				return nil
+			}
+			if info.Mode()&os.ModeSymlink != 0 {
 				return nil
 			}
 			expected, err := ioutil.ReadFile(path)

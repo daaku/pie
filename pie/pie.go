@@ -39,6 +39,9 @@ func (r *Run) RunFile(path string, info os.FileInfo, err error) error {
 	if info.IsDir() {
 		return nil
 	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return nil
+	}
 	if info.Size() == 0 {
 		return nil
 	}
