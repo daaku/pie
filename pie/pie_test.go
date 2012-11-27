@@ -98,7 +98,7 @@ func TestAll(t *testing.T) {
 	for _, test := range cases {
 		tmp, err := test.MakeTempCopy()
 		if err != nil {
-			t.Fatal("faled to make temp copy for %s: %s", test.Name, err)
+			t.Fatalf("faled to make temp copy for %s: %s", test.Name, err)
 		}
 		run := &pie.Run{
 			Root: tmp,
@@ -106,14 +106,14 @@ func TestAll(t *testing.T) {
 		}
 		err = run.Run()
 		if err != nil {
-			t.Fatal("run for %s failed: %s", test.Name, err)
+			t.Fatalf("run for %s failed: %s", test.Name, err)
 		}
 		same, err := test.Compare(tmp)
 		if err != nil {
 			t.Fatalf("compare for %s failed: %s", test.Name, err)
 		}
 		if !same {
-			t.Fatal("did not get expected result for %s", test.Name)
+			t.Fatalf("did not get expected result for %s", test.Name)
 		}
 		if *removeTemp {
 			os.RemoveAll(tmp)
