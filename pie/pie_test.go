@@ -18,13 +18,15 @@ import (
 var removeTemp = flag.Bool("remove-temp", true, "remove temp copies of test data")
 
 type TestCase struct {
-	Name string
-	Rule []pie.Rule
+	Name     string
+	Parallel int
+	Rule     []pie.Rule
 }
 
 var cases = []TestCase{
 	TestCase{
-		Name: "base",
+		Name:     "base",
+		Parallel: 1,
 		Rule: []pie.Rule{
 			&pie.ReplaceAll{
 				Target: regexp.MustCompile("hello"),
@@ -33,7 +35,8 @@ var cases = []TestCase{
 		},
 	},
 	TestCase{
-		Name: "empty-file",
+		Name:     "base",
+		Parallel: 2,
 		Rule: []pie.Rule{
 			&pie.ReplaceAll{
 				Target: regexp.MustCompile("hello"),
@@ -42,7 +45,8 @@ var cases = []TestCase{
 		},
 	},
 	TestCase{
-		Name: "ignore-git",
+		Name:     "empty-file",
+		Parallel: 2,
 		Rule: []pie.Rule{
 			&pie.ReplaceAll{
 				Target: regexp.MustCompile("hello"),
@@ -51,7 +55,18 @@ var cases = []TestCase{
 		},
 	},
 	TestCase{
-		Name: "ignore-symlink",
+		Name:     "ignore-git",
+		Parallel: 2,
+		Rule: []pie.Rule{
+			&pie.ReplaceAll{
+				Target: regexp.MustCompile("hello"),
+				Repl:   []byte("goodbye"),
+			},
+		},
+	},
+	TestCase{
+		Name:     "ignore-symlink",
+		Parallel: 2,
 		Rule: []pie.Rule{
 			&pie.ReplaceAll{
 				Target: regexp.MustCompile("hello"),
@@ -116,14 +131,16 @@ func GetDataDir() string {
 }
 
 func TestAll(t *testing.T) {
+	t.Parallel()
 	for _, test := range cases {
 		tmp, err := test.MakeTempCopy()
 		if err != nil {
 			t.Fatalf("faled to make temp copy for %s: %s", test.Name, err)
 		}
 		run := &pie.Run{
-			Root: tmp,
-			Rule: test.Rule,
+			Root:     tmp,
+			Parallel: test.Parallel,
+			Rule:     test.Rule,
 		}
 		err = run.Run()
 		if err != nil {

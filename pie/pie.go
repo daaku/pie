@@ -34,10 +34,7 @@ func (r *ReplaceAll) Apply(src []byte) []byte {
 	return r.Target.ReplaceAll(src, r.Repl)
 }
 
-func (r *Run) RunFile(path string, info os.FileInfo, err error) error {
-	if err != nil {
-		return err
-	}
+func (r *Run) RunFile(path string, info os.FileInfo) error {
 	if info.IsDir() {
 		return nil
 	}
@@ -89,12 +86,13 @@ func (r *Run) Run() error {
 	filepath.Walk(
 		r.Root,
 		func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
 			if filepath.Base(path) == ".git" {
 				return filepath.SkipDir
 			}
-			run.Do(func() error {
-				return r.RunFile(path, info, err)
-			})
+			run.Do(func() error { return r.RunFile(path, info) })
 			return nil
 		})
 	return run.Wait()
