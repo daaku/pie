@@ -2,6 +2,7 @@ package pie_test
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"github.com/daaku/pie/pie"
 	"go/build"
@@ -14,6 +15,8 @@ import (
 	"testing"
 )
 
+var removeTemp = flag.Bool("remove-temp", true, "remove temp copies of test data")
+
 type TestCase struct {
 	Name string
 	Rule []pie.Rule
@@ -22,6 +25,15 @@ type TestCase struct {
 var cases = []TestCase{
 	TestCase{
 		Name: "base",
+		Rule: []pie.Rule{
+			&pie.ReplaceAll{
+				Target: regexp.MustCompile("hello"),
+				Repl:   []byte("goodbye"),
+			},
+		},
+	},
+	TestCase{
+		Name: "empty-file",
 		Rule: []pie.Rule{
 			&pie.ReplaceAll{
 				Target: regexp.MustCompile("hello"),
@@ -103,6 +115,8 @@ func TestAll(t *testing.T) {
 		if !same {
 			t.Fatal("did not get expected result for %s", test.Name)
 		}
-		os.RemoveAll(tmp)
+		if *removeTemp {
+			os.RemoveAll(tmp)
+		}
 	}
 }

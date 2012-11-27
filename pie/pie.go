@@ -36,6 +36,9 @@ func (r *Run) RunFile(path string, info os.FileInfo, err error) error {
 	if info.IsDir() {
 		return nil
 	}
+	if info.Size() == 0 {
+		return nil
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("error opening file %s: %s", path, err)
