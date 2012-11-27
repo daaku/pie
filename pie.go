@@ -8,18 +8,19 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 4 {
-		fmt.Printf("usage: %s <directory> <target-regexp> <replace-pattern>\n", os.Args[0])
+	argl := len(os.Args)
+	if argl < 4 || argl%2 != 0 {
+		fmt.Printf("usage: %s <directory> [<target-regexp> <replace-pattern>]...\n", os.Args[0])
 		os.Exit(1)
 	}
 	r := &pie.Run{
 		Root: os.Args[1],
-		Rule: []pie.Rule{
-			&pie.ReplaceAll{
-				Target: regexp.MustCompile(os.Args[2]),
-				Repl:   []byte(os.Args[3]),
-			},
-		},
+	}
+	for x := 2; x < argl; x = x + 2 {
+		r.Rule = append(r.Rule, &pie.ReplaceAll{
+			Target: regexp.MustCompile(os.Args[x]),
+			Repl:   []byte(os.Args[x+1]),
+		})
 	}
 	err := r.Run()
 	if err != nil {
