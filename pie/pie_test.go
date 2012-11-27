@@ -41,6 +41,15 @@ var cases = []TestCase{
 			},
 		},
 	},
+	TestCase{
+		Name: "ignore-git",
+		Rule: []pie.Rule{
+			&pie.ReplaceAll{
+				Target: regexp.MustCompile("hello"),
+				Repl:   []byte("goodbye"),
+			},
+		},
+	},
 }
 
 func (t TestCase) dir(last string) string {

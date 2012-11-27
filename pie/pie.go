@@ -33,6 +33,9 @@ func (r *ReplaceAll) Apply(src []byte) []byte {
 }
 
 func (r *Run) RunFile(path string, info os.FileInfo, err error) error {
+	if filepath.Base(path) == ".git" {
+		return filepath.SkipDir
+	}
 	if info.IsDir() {
 		return nil
 	}
