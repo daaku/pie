@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/daaku/pie/pie"
+	"go/build"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -74,7 +75,11 @@ func (t TestCase) Compare(dir string) (bool, error) {
 }
 
 func GetDataDir() string {
-	return "/home/naitik/usr/go/src/pkg/github.com/daaku/pie/pie/_tests"
+	pkg, err := build.Import("github.com/daaku/pie/pie/_tests", "", build.FindOnly)
+	if err != nil {
+		panic(fmt.Sprintf("could not find test data directory %s", err))
+	}
+	return pkg.Dir
 }
 
 func TestAll(t *testing.T) {
