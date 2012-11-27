@@ -1,6 +1,7 @@
 package pie
 
 import (
+	"code.google.com/p/rog-go/parallel"
 	"fmt"
 	"io/ioutil"
 	"launchpad.net/gommap"
@@ -15,8 +16,9 @@ type Rule interface {
 }
 
 type Run struct {
-	Root string
-	Rule []Rule
+	Root     string
+	Rule     []Rule
+	Parallel int
 }
 
 type ReplaceAll struct {
@@ -33,8 +35,8 @@ func (r *ReplaceAll) Apply(src []byte) []byte {
 }
 
 func (r *Run) RunFile(path string, info os.FileInfo, err error) error {
-	if filepath.Base(path) == ".git" {
-		return filepath.SkipDir
+	if err != nil {
+		return err
 	}
 	if info.IsDir() {
 		return nil
@@ -83,9 +85,17 @@ func (r *Run) RunFile(path string, info os.FileInfo, err error) error {
 }
 
 func (r *Run) Run() error {
-	return filepath.Walk(
+	run := parallel.NewRun(r.Parallel)
+	filepath.Walk(
 		r.Root,
 		func(path string, info os.FileInfo, err error) error {
-			return r.RunFile(path, info, err)
+			if filepath.Base(path) == ".git" {
+				return filepath.SkipDir
+			}
+			run.Do(func() error {
+				return r.RunFile(path, info, err)
+			})
+			return nil
 		})
+	return run.Wait()
 }
