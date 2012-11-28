@@ -16,9 +16,11 @@ type Rule interface {
 }
 
 type Run struct {
-	Root     string
-	Rule     []Rule
-	Parallel int
+	Root       string
+	Rule       []Rule
+	Parallel   int
+	FileIgnore *regexp.Regexp
+	FileFilter *regexp.Regexp
 }
 
 type ReplaceAll struct {
@@ -35,15 +37,6 @@ func (r *ReplaceAll) Apply(src []byte) []byte {
 }
 
 func (r *Run) RunFile(path string, info os.FileInfo) error {
-	if info.IsDir() {
-		return nil
-	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		return nil
-	}
-	if info.Size() == 0 {
-		return nil
-	}
 	file, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("error opening file %s: %s", path, err)
@@ -91,6 +84,21 @@ func (r *Run) Run() error {
 			}
 			if filepath.Base(path) == ".git" {
 				return filepath.SkipDir
+			}
+			if info.IsDir() {
+				return nil
+			}
+			if info.Mode()&os.ModeSymlink != 0 {
+				return nil
+			}
+			if info.Size() == 0 {
+				return nil
+			}
+			if r.FileIgnore != nil && r.FileIgnore.MatchString(path) {
+				return nil
+			}
+			if r.FileFilter != nil && !r.FileFilter.MatchString(path) {
+				return nil
 			}
 			run.Do(func() error { return r.RunFile(path, info) })
 			return nil

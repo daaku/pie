@@ -12,6 +12,8 @@ import (
 var (
 	goMaxProcs   = flag.Int("gomaxprocs", runtime.NumCPU(), "gomaxprocs")
 	parallelSize = flag.Int("parallel", runtime.NumCPU(), "number of goroutines")
+	ignoreRegexp = flag.String("ignore", "", "file full path ignore regexp")
+	filterRegexp = flag.String("filter", "", "file full path filter regexp")
 )
 
 func main() {
@@ -33,6 +35,12 @@ func main() {
 	r := &pie.Run{
 		Root:     args[0],
 		Parallel: *parallelSize,
+	}
+	if *ignoreRegexp != "" {
+		r.FileIgnore = regexp.MustCompile(*ignoreRegexp)
+	}
+	if *filterRegexp != "" {
+		r.FileFilter = regexp.MustCompile(*filterRegexp)
 	}
 	for x := 1; x < argl; x = x + 2 {
 		r.Rule = append(r.Rule, &pie.ReplaceAll{

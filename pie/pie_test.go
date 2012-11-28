@@ -18,9 +18,11 @@ import (
 var removeTemp = flag.Bool("remove-temp", true, "remove temp copies of test data")
 
 type TestCase struct {
-	Name     string
-	Parallel int
-	Rule     []pie.Rule
+	Name       string
+	Parallel   int
+	Rule       []pie.Rule
+	FileIgnore *regexp.Regexp
+	FileFilter *regexp.Regexp
 }
 
 var cases = []TestCase{
@@ -67,6 +69,28 @@ var cases = []TestCase{
 	TestCase{
 		Name:     "ignore-symlink",
 		Parallel: 2,
+		Rule: []pie.Rule{
+			&pie.ReplaceAll{
+				Target: regexp.MustCompile("hello"),
+				Repl:   []byte("goodbye"),
+			},
+		},
+	},
+	TestCase{
+		Name:       "file-ignore",
+		Parallel:   2,
+		FileIgnore: regexp.MustCompile("foo"),
+		Rule: []pie.Rule{
+			&pie.ReplaceAll{
+				Target: regexp.MustCompile("hello"),
+				Repl:   []byte("goodbye"),
+			},
+		},
+	},
+	TestCase{
+		Name:       "file-filter",
+		Parallel:   2,
+		FileFilter: regexp.MustCompile("(a|b)$"),
 		Rule: []pie.Rule{
 			&pie.ReplaceAll{
 				Target: regexp.MustCompile("hello"),
@@ -138,9 +162,11 @@ func TestAll(t *testing.T) {
 			t.Fatalf("faled to make temp copy for %s: %s", test.Name, err)
 		}
 		run := &pie.Run{
-			Root:     tmp,
-			Parallel: test.Parallel,
-			Rule:     test.Rule,
+			Root:       tmp,
+			Parallel:   test.Parallel,
+			Rule:       test.Rule,
+			FileIgnore: test.FileIgnore,
+			FileFilter: test.FileFilter,
 		}
 		err = run.Run()
 		if err != nil {
