@@ -42,7 +42,7 @@ func main() {
 	}
 	err := r.Run()
 	if err != nil {
-		fmt.Printf("error: %s", err)
+		fmt.Fprintf(os.Stderr, "error: %s", err)
 		os.Exit(1)
 	}
 }
