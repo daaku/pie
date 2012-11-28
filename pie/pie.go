@@ -19,6 +19,7 @@ type Run struct {
 	Root       string
 	Rule       []Rule
 	Parallel   int
+	BatchSize  int64
 	FileIgnore *regexp.Regexp
 	FileFilter *regexp.Regexp
 }
@@ -34,6 +35,11 @@ func (r *ReplaceAll) Match(src []byte) bool {
 
 func (r *ReplaceAll) Apply(src []byte) []byte {
 	return r.Target.ReplaceAll(src, r.Repl)
+}
+
+type pathFileInfo struct {
+	Path string
+	Info os.FileInfo
 }
 
 func (r *Run) RunFile(path string, info os.FileInfo) error {
@@ -74,15 +80,30 @@ func (r *Run) RunFile(path string, info os.FileInfo) error {
 	return nil
 }
 
+func (r *Run) runBatch(items []pathFileInfo) func() error {
+	return func() error {
+		var err error
+		for _, i := range items {
+			err = r.RunFile(i.Path, i.Info)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
 func (r *Run) Run() error {
 	run := parallel.NewRun(r.Parallel)
+	var batch []pathFileInfo
+	var batchSize int64
 	filepath.Walk(
 		r.Root,
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
-			if filepath.Base(path) == ".git" {
+			if info.Name() == ".git" {
 				return filepath.SkipDir
 			}
 			if info.IsDir() {
@@ -91,7 +112,8 @@ func (r *Run) Run() error {
 			if info.Mode()&os.ModeSymlink != 0 {
 				return nil
 			}
-			if info.Size() == 0 {
+			size := info.Size()
+			if size == 0 {
 				return nil
 			}
 			if r.FileIgnore != nil && r.FileIgnore.MatchString(path) {
@@ -100,8 +122,17 @@ func (r *Run) Run() error {
 			if r.FileFilter != nil && !r.FileFilter.MatchString(path) {
 				return nil
 			}
-			run.Do(func() error { return r.RunFile(path, info) })
+			batchSize += size
+			batch = append(batch, pathFileInfo{path, info})
+			if batchSize > r.BatchSize {
+				run.Do(r.runBatch(batch))
+				batchSize = 0
+				batch = nil
+			}
 			return nil
 		})
+	if batch != nil {
+		run.Do(r.runBatch(batch))
+	}
 	return run.Wait()
 }

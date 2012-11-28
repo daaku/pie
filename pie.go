@@ -15,6 +15,7 @@ var (
 	parallelSize = flag.Int("parallel", runtime.NumCPU(), "number of goroutines")
 	ignoreRegexp = flag.String("ignore", "", "file full path ignore regexp")
 	filterRegexp = flag.String("filter", "", "file full path filter regexp")
+	batchSize    = flag.Int64("batch-size", 104857600, "approximate batch size in bytes")
 )
 
 func addFromStdin(r *pie.Run) {

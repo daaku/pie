@@ -167,6 +167,7 @@ func TestAll(t *testing.T) {
 			Rule:       test.Rule,
 			FileIgnore: test.FileIgnore,
 			FileFilter: test.FileFilter,
+			BatchSize:  10000,
 		}
 		err = run.Run()
 		if err != nil {
