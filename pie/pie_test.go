@@ -18,54 +18,45 @@ import (
 var removeTemp = flag.Bool("remove-temp", true, "remove temp copies of test data")
 
 type TestCase struct {
-	Name       string
-	Rule       []pie.Rule
-	FileIgnore *regexp.Regexp
-	FileFilter *regexp.Regexp
+	Name        string
+	Instruction []pie.Instruction
+	FileIgnore  *regexp.Regexp
+	FileFilter  *regexp.Regexp
 }
 
 var cases = []TestCase{
 	TestCase{
 		Name: "base",
-		Rule: []pie.Rule{
+		Instruction: []pie.Instruction{
 			&pie.ReplaceAll{
-				Target: regexp.MustCompile("hello"),
-				Repl:   []byte("goodbye"),
-			},
-		},
-	},
-	TestCase{
-		Name: "base",
-		Rule: []pie.Rule{
-			&pie.ReplaceAll{
-				Target: regexp.MustCompile("hello"),
+				Target: "hello",
 				Repl:   []byte("goodbye"),
 			},
 		},
 	},
 	TestCase{
 		Name: "empty-file",
-		Rule: []pie.Rule{
+		Instruction: []pie.Instruction{
 			&pie.ReplaceAll{
-				Target: regexp.MustCompile("hello"),
+				Target: "hello",
 				Repl:   []byte("goodbye"),
 			},
 		},
 	},
 	TestCase{
 		Name: "ignore-git",
-		Rule: []pie.Rule{
+		Instruction: []pie.Instruction{
 			&pie.ReplaceAll{
-				Target: regexp.MustCompile("hello"),
+				Target: "hello",
 				Repl:   []byte("goodbye"),
 			},
 		},
 	},
 	TestCase{
 		Name: "ignore-symlink",
-		Rule: []pie.Rule{
+		Instruction: []pie.Instruction{
 			&pie.ReplaceAll{
-				Target: regexp.MustCompile("hello"),
+				Target: "hello",
 				Repl:   []byte("goodbye"),
 			},
 		},
@@ -73,9 +64,9 @@ var cases = []TestCase{
 	TestCase{
 		Name:       "file-ignore",
 		FileIgnore: regexp.MustCompile("foo"),
-		Rule: []pie.Rule{
+		Instruction: []pie.Instruction{
 			&pie.ReplaceAll{
-				Target: regexp.MustCompile("hello"),
+				Target: "hello",
 				Repl:   []byte("goodbye"),
 			},
 		},
@@ -83,9 +74,9 @@ var cases = []TestCase{
 	TestCase{
 		Name:       "file-filter",
 		FileFilter: regexp.MustCompile("(a|b)$"),
-		Rule: []pie.Rule{
+		Instruction: []pie.Instruction{
 			&pie.ReplaceAll{
-				Target: regexp.MustCompile("hello"),
+				Target: "hello",
 				Repl:   []byte("goodbye"),
 			},
 		},
@@ -154,11 +145,10 @@ func TestAll(t *testing.T) {
 			t.Fatalf("faled to make temp copy for %s: %s", test.Name, err)
 		}
 		run := &pie.Run{
-			Root:       tmp,
-			Rule:       test.Rule,
-			FileIgnore: test.FileIgnore,
-			FileFilter: test.FileFilter,
-			BatchSize:  10000,
+			Root:        tmp,
+			Instruction: test.Instruction,
+			FileIgnore:  test.FileIgnore,
+			FileFilter:  test.FileFilter,
 		}
 		err = run.Run()
 		if err != nil {
@@ -186,11 +176,10 @@ func BenchmarkBase(b *testing.B) {
 			b.Fatalf("faled to make temp copy for %s: %s", test.Name, err)
 		}
 		run := &pie.Run{
-			Root:       tmp,
-			Rule:       test.Rule,
-			FileIgnore: test.FileIgnore,
-			FileFilter: test.FileFilter,
-			BatchSize:  10000,
+			Root:        tmp,
+			Instruction: test.Instruction,
+			FileIgnore:  test.FileIgnore,
+			FileFilter:  test.FileFilter,
 		}
 		b.StartTimer()
 		err = run.Run()

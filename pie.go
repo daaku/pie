@@ -4,7 +4,6 @@ import (
 	"encoding/csv"
 	"flag"
 	"fmt"
-	"github.com/daaku/go.flagbytes"
 	"github.com/daaku/pie/pie"
 	"os"
 	"regexp"
@@ -18,7 +17,6 @@ var (
 	goMaxProcs   = flag.Int("gomaxprocs", runtime.NumCPU(), "gomaxprocs")
 	ignoreRegexp = flag.String("ignore", "", "file full path ignore regexp")
 	filterRegexp = flag.String("filter", "", "file full path filter regexp")
-	batchSize    = flagbytes.Bytes("batch-size", "10mib", "approximate batch size in bytes")
 	cpuprofile   = flag.String("cpuprofile", "", "write cpu profile to file")
 	debug        = flag.Bool("debug", false, "enable debug mode")
 )
@@ -30,14 +28,14 @@ func addFromStdin(r *pie.Run) {
 	reader.FieldsPerRecord = 2
 	reader.LazyQuotes = true
 	reader.TrimLeadingSpace = true
-	rules, err := reader.ReadAll()
+	instructions, err := reader.ReadAll()
 	if err != nil {
-		panic(fmt.Sprintf("failed reading rules from stdin: %s", err))
+		panic(fmt.Sprintf("failed reading instructions from stdin: %s", err))
 	}
-	for _, rule := range rules {
-		r.Rule = append(r.Rule, &pie.ReplaceAll{
-			Target: regexp.MustCompile(rule[0]),
-			Repl:   []byte(rule[1]),
+	for _, instruction := range instructions {
+		r.Instruction = append(r.Instruction, &pie.ReplaceAll{
+			Target: instruction[0],
+			Repl:   []byte(instruction[1]),
 		})
 	}
 }
@@ -45,8 +43,8 @@ func addFromStdin(r *pie.Run) {
 func addFromArgs(r *pie.Run, args []string) {
 	argl := len(args)
 	for x := 1; x < argl; x = x + 2 {
-		r.Rule = append(r.Rule, &pie.ReplaceAll{
-			Target: regexp.MustCompile(args[x]),
+		r.Instruction = append(r.Instruction, &pie.ReplaceAll{
+			Target: args[x],
 			Repl:   []byte(args[x+1]),
 		})
 	}
@@ -85,9 +83,8 @@ func main() {
 	}
 
 	r := &pie.Run{
-		Root:      args[0],
-		BatchSize: *batchSize,
-		Debug:     *debug,
+		Root:  args[0],
+		Debug: *debug,
 	}
 	if *ignoreRegexp != "" {
 		r.FileIgnore = regexp.MustCompile(*ignoreRegexp)
@@ -100,8 +97,8 @@ func main() {
 	} else {
 		addFromArgs(r, args)
 	}
-	if len(r.Rule) == 0 {
-		fmt.Fprintf(os.Stderr, "error: no rules provided on the command line or via stdin\n")
+	if len(r.Instruction) == 0 {
+		fmt.Fprintf(os.Stderr, "error: no instructions provided on the command line or via stdin\n")
 		flag.Usage()
 		os.Exit(1)
 	}

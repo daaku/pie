@@ -12,31 +12,48 @@ import (
 	"sync"
 )
 
-type Rule interface {
+// Instructions describe the modification. This happens once for each parallel logical
+// thread of execution.
+type Instruction interface {
+	Compile() CompiledInstruction
+}
+
+type CompiledInstruction interface {
 	Match(src []byte) bool
 	Apply(src []byte) []byte
 }
 
 type Run struct {
-	Root       string
-	Rule       []Rule
-	BatchSize  uint64
-	FileIgnore *regexp.Regexp
-	FileFilter *regexp.Regexp
-	Debug      bool
+	Root        string
+	Instruction []Instruction
+	FileIgnore  *regexp.Regexp
+	FileFilter  *regexp.Regexp
+	Debug       bool
 }
 
-type ReplaceAll struct {
+type replaceAllCompiled struct {
 	Target *regexp.Regexp
 	Repl   []byte
 }
 
-func (r *ReplaceAll) Match(src []byte) bool {
+func (r *replaceAllCompiled) Match(src []byte) bool {
 	return r.Target.Match(src)
 }
 
-func (r *ReplaceAll) Apply(src []byte) []byte {
+func (r *replaceAllCompiled) Apply(src []byte) []byte {
 	return r.Target.ReplaceAll(src, r.Repl)
+}
+
+type ReplaceAll struct {
+	Target string
+	Repl   []byte
+}
+
+func (r *ReplaceAll) Compile() CompiledInstruction {
+	return &replaceAllCompiled{
+		Target: regexp.MustCompile(r.Target),
+		Repl:   r.Repl,
+	}
 }
 
 type pathFileInfo struct {
@@ -44,7 +61,7 @@ type pathFileInfo struct {
 	Info os.FileInfo
 }
 
-func (r *Run) RunFile(path string, info os.FileInfo) error {
+func (r *Run) RunFile(compiledInstructions []CompiledInstruction, path string, info os.FileInfo) error {
 	if r.Debug {
 		fmt.Print("f")
 	}
@@ -58,24 +75,24 @@ func (r *Run) RunFile(path string, info os.FileInfo) error {
 	}
 	var out []byte
 	changed := false
-	for _, rule := range r.Rule {
+	for _, compiledInstruction := range compiledInstructions {
 		if r.Debug {
 			fmt.Print("r")
 		}
 		// optimize for no changes to just work with mmaped file
 		if !changed {
-			if !rule.Match(mapped) {
+			if !compiledInstruction.Match(mapped) {
 				continue
 			}
-			out = rule.Apply(mapped)
+			out = compiledInstruction.Apply(mapped)
 			changed = true
 			mapped.UnsafeUnmap()
 			file.Close()
 		} else {
-			if !rule.Match(out) {
+			if !compiledInstruction.Match(out) {
 				continue
 			}
-			out = rule.Apply(out)
+			out = compiledInstruction.Apply(out)
 		}
 	}
 	if changed {
@@ -94,24 +111,36 @@ func (r *Run) RunFile(path string, info os.FileInfo) error {
 	return nil
 }
 
+func (r *Run) compileInstruction() []CompiledInstruction {
+	compiledInstructions := make([]CompiledInstruction, len(r.Instruction))
+	for i, instruction := range r.Instruction {
+		compiledInstructions[i] = instruction.Compile()
+	}
+	return compiledInstructions
+}
+
 func (r *Run) runBatch(items [][]*pathFileInfo, wg *sync.WaitGroup) {
 	if r.Debug {
 		fmt.Print("b")
 	}
+	compiledInstructions := r.compileInstruction()
 	var err error
 	for _, o := range items {
 		for _, i := range o {
-			err = r.RunFile(i.Path, i.Info)
+			err = r.RunFile(compiledInstructions, i.Path, i.Info)
 			if err != nil {
 				fmt.Fprint(os.Stderr, err)
 				os.Exit(1)
 			}
 		}
 	}
-	wg.Done()
+	if wg != nil {
+		wg.Done()
+	}
 }
 
 func (r *Run) Run() error {
+	const batchUnitTarget = 1048576 // 1 mb
 	var all [][]*pathFileInfo
 	var batch []*pathFileInfo
 	var batchSize uint64
@@ -142,7 +171,7 @@ func (r *Run) Run() error {
 			}
 			batchSize += uint64(size)
 			batch = append(batch, &pathFileInfo{path, info})
-			if batchSize > r.BatchSize {
+			if batchSize > batchUnitTarget {
 				all = append(all, batch)
 				batchSize = 0
 				batch = nil
@@ -153,12 +182,18 @@ func (r *Run) Run() error {
 		all = append(all, batch)
 	}
 
-	wg := new(sync.WaitGroup)
 	allLen := len(all)
 	chunk := int(allLen / runtime.NumCPU())
+	if allLen < 2 {
+		r.runBatch(all, nil)
+		return nil
+	}
+
+	h := 0
+	wg := new(sync.WaitGroup)
 	for i := 0; i < allLen; i += chunk {
 		wg.Add(1)
-		h := int(math.Min(float64(i+chunk), float64(allLen)))
+		h = int(math.Min(float64(i+chunk), float64(allLen)))
 		go r.runBatch(all[i:h], wg)
 	}
 	wg.Wait()
