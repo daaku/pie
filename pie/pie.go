@@ -15,7 +15,7 @@ import (
 // Instructions describe the modification. This happens once for each parallel logical
 // thread of execution.
 type Instruction interface {
-	Compile() CompiledInstruction
+	Compile() (CompiledInstruction, error)
 }
 
 type CompiledInstruction interface {
@@ -49,16 +49,15 @@ type ReplaceAll struct {
 	Repl   []byte
 }
 
-func (r *ReplaceAll) Compile() CompiledInstruction {
-	return &replaceAllCompiled{
-		Target: regexp.MustCompile(r.Target),
-		Repl:   r.Repl,
+func (r *ReplaceAll) Compile() (CompiledInstruction, error) {
+	re, err := regexp.Compile(r.Target)
+	if err != nil {
+		return nil, err
 	}
-}
-
-type pathFileInfo struct {
-	Path string
-	Info os.FileInfo
+	return &replaceAllCompiled{
+		Target: re,
+		Repl:   r.Repl,
+	}, nil
 }
 
 func (r *Run) RunFile(compiledInstructions []CompiledInstruction, path string, info os.FileInfo) error {
@@ -111,20 +110,32 @@ func (r *Run) RunFile(compiledInstructions []CompiledInstruction, path string, i
 	return nil
 }
 
-func (r *Run) compileInstruction() []CompiledInstruction {
+func (r *Run) compileInstruction() ([]CompiledInstruction, error) {
 	compiledInstructions := make([]CompiledInstruction, len(r.Instruction))
+	var err error
 	for i, instruction := range r.Instruction {
-		compiledInstructions[i] = instruction.Compile()
+		compiledInstructions[i], err = instruction.Compile()
+		if err != nil {
+			return nil, err
+		}
 	}
-	return compiledInstructions
+	return compiledInstructions, nil
+}
+
+type pathFileInfo struct {
+	Path string
+	Info os.FileInfo
 }
 
 func (r *Run) runBatch(items [][]*pathFileInfo, wg *sync.WaitGroup) {
 	if r.Debug {
 		fmt.Print("b")
 	}
-	compiledInstructions := r.compileInstruction()
-	var err error
+	compiledInstructions, err := r.compileInstruction()
+	if err != nil {
+		fmt.Fprint(os.Stderr, err)
+		os.Exit(1)
+	}
 	for _, o := range items {
 		for _, i := range o {
 			err = r.RunFile(compiledInstructions, i.Path, i.Info)
