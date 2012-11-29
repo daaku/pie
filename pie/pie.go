@@ -31,35 +31,6 @@ type Run struct {
 	Debug       bool
 }
 
-type replaceAllCompiled struct {
-	Target *regexp.Regexp
-	Repl   []byte
-}
-
-func (r *replaceAllCompiled) Match(src []byte) bool {
-	return r.Target.Match(src)
-}
-
-func (r *replaceAllCompiled) Apply(src []byte) []byte {
-	return r.Target.ReplaceAll(src, r.Repl)
-}
-
-type ReplaceAll struct {
-	Target string
-	Repl   []byte
-}
-
-func (r *ReplaceAll) Compile() (CompiledInstruction, error) {
-	re, err := regexp.Compile(r.Target)
-	if err != nil {
-		return nil, err
-	}
-	return &replaceAllCompiled{
-		Target: re,
-		Repl:   r.Repl,
-	}, nil
-}
-
 func (r *Run) RunFile(compiledInstructions []CompiledInstruction, path string, info os.FileInfo) error {
 	if r.Debug {
 		fmt.Print("f")
