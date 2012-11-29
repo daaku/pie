@@ -80,7 +80,7 @@ func (r *Run) RunFile(path string, info os.FileInfo) error {
 	return nil
 }
 
-func (r *Run) runBatch(items []pathFileInfo) func() error {
+func (r *Run) runBatch(items []*pathFileInfo) func() error {
 	return func() error {
 		var err error
 		for _, i := range items {
@@ -95,7 +95,7 @@ func (r *Run) runBatch(items []pathFileInfo) func() error {
 
 func (r *Run) Run() error {
 	run := parallel.NewRun(r.Parallel)
-	var batch []pathFileInfo
+	var batch []*pathFileInfo
 	var batchSize int64
 	filepath.Walk(
 		r.Root,
@@ -123,7 +123,7 @@ func (r *Run) Run() error {
 				return nil
 			}
 			batchSize += size
-			batch = append(batch, pathFileInfo{path, info})
+			batch = append(batch, &pathFileInfo{path, info})
 			if batchSize > r.BatchSize {
 				run.Do(r.runBatch(batch))
 				batchSize = 0
