@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"runtime"
+	"runtime/pprof"
 )
 
 var (
@@ -16,6 +17,7 @@ var (
 	ignoreRegexp = flag.String("ignore", "", "file full path ignore regexp")
 	filterRegexp = flag.String("filter", "", "file full path filter regexp")
 	batchSize    = flag.Int64("batch-size", 104857600, "approximate batch size in bytes")
+	cpuprofile   = flag.String("cpuprofile", "", "write cpu profile to file")
 )
 
 func addFromStdin(r *pie.Run) {
@@ -56,7 +58,19 @@ func main() {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			fmt.Fprint(os.Stderr, err)
+			os.Exit(1)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
 	runtime.GOMAXPROCS(*goMaxProcs)
+
 	args := flag.Args()
 	argl := len(args)
 	if argl%2 == 0 {
