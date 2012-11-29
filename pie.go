@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"flag"
 	"fmt"
+	"github.com/daaku/go.flagbytes"
 	"github.com/daaku/pie/pie"
 	"os"
 	"regexp"
@@ -16,7 +17,7 @@ var (
 	parallelSize = flag.Int("parallel", runtime.NumCPU(), "number of goroutines")
 	ignoreRegexp = flag.String("ignore", "", "file full path ignore regexp")
 	filterRegexp = flag.String("filter", "", "file full path filter regexp")
-	batchSize    = flag.Int64("batch-size", 104857600, "approximate batch size in bytes")
+	batchSize    = flagbytes.Bytes("batch-size", "100mb", "approximate batch size in bytes")
 	cpuprofile   = flag.String("cpuprofile", "", "write cpu profile to file")
 )
 
