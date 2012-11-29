@@ -64,6 +64,9 @@ func (r *Run) RunFile(path string, info os.FileInfo) error {
 			out = rule.Apply(mapped)
 			changed = true
 		} else {
+			if !rule.Match(out) {
+				continue
+			}
 			out = rule.Apply(out)
 		}
 	}
