@@ -16,7 +16,7 @@ var (
 	goMaxProcs   = flag.Int("gomaxprocs", runtime.NumCPU(), "gomaxprocs")
 	ignoreRegexp = flag.String("ignore", "", "file full path ignore regexp")
 	filterRegexp = flag.String("filter", "", "file full path filter regexp")
-	batchSize    = flagbytes.Bytes("batch-size", "100mb", "approximate batch size in bytes")
+	batchSize    = flagbytes.Bytes("batch-size", "10mib", "approximate batch size in bytes")
 	cpuprofile   = flag.String("cpuprofile", "", "write cpu profile to file")
 )
 
