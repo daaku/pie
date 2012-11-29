@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"launchpad.net/gommap"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sync"
 )
 
@@ -21,6 +23,7 @@ type Run struct {
 	BatchSize  uint64
 	FileIgnore *regexp.Regexp
 	FileFilter *regexp.Regexp
+	Debug      bool
 }
 
 type ReplaceAll struct {
@@ -42,19 +45,23 @@ type pathFileInfo struct {
 }
 
 func (r *Run) RunFile(path string, info os.FileInfo) error {
+	if r.Debug {
+		fmt.Print("f")
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("error opening file %s: %s", path, err)
 	}
-	defer file.Close()
-	mapped, err := gommap.Map(file.Fd(), gommap.PROT_READ, gommap.MAP_PRIVATE)
+	mapped, err := gommap.Map(file.Fd(), gommap.PROT_READ, gommap.MAP_SHARED)
 	if err != nil {
 		return fmt.Errorf("error mmaping file %s: %s", path, err)
 	}
-	defer mapped.UnsafeUnmap()
 	var out []byte
 	changed := false
 	for _, rule := range r.Rule {
+		if r.Debug {
+			fmt.Print("r")
+		}
 		// optimize for no changes to just work with mmaped file
 		if !changed {
 			if !rule.Match(mapped) {
@@ -62,6 +69,8 @@ func (r *Run) RunFile(path string, info os.FileInfo) error {
 			}
 			out = rule.Apply(mapped)
 			changed = true
+			mapped.UnsafeUnmap()
+			file.Close()
 		} else {
 			if !rule.Match(out) {
 				continue
@@ -78,24 +87,32 @@ func (r *Run) RunFile(path string, info os.FileInfo) error {
 		if err != nil {
 			return fmt.Errorf("error writing new file %s: %s", path, err)
 		}
+	} else {
+		mapped.UnsafeUnmap()
+		file.Close()
 	}
 	return nil
 }
 
-func (r *Run) runBatch(items []*pathFileInfo, wg *sync.WaitGroup) {
+func (r *Run) runBatch(items [][]*pathFileInfo, wg *sync.WaitGroup) {
+	if r.Debug {
+		fmt.Print("b")
+	}
 	var err error
-	for _, i := range items {
-		err = r.RunFile(i.Path, i.Info)
-		if err != nil {
-			fmt.Fprint(os.Stderr, err)
-			os.Exit(1)
+	for _, o := range items {
+		for _, i := range o {
+			err = r.RunFile(i.Path, i.Info)
+			if err != nil {
+				fmt.Fprint(os.Stderr, err)
+				os.Exit(1)
+			}
 		}
 	}
 	wg.Done()
 }
 
 func (r *Run) Run() error {
-	wg := new(sync.WaitGroup)
+	var all [][]*pathFileInfo
 	var batch []*pathFileInfo
 	var batchSize uint64
 	filepath.Walk(
@@ -126,17 +143,25 @@ func (r *Run) Run() error {
 			batchSize += uint64(size)
 			batch = append(batch, &pathFileInfo{path, info})
 			if batchSize > r.BatchSize {
-				wg.Add(1)
-				go r.runBatch(batch, wg)
+				all = append(all, batch)
 				batchSize = 0
 				batch = nil
 			}
 			return nil
 		})
 	if batch != nil {
+		all = append(all, batch)
+	}
+
+	wg := new(sync.WaitGroup)
+	allLen := len(all)
+	chunk := int(allLen / runtime.NumCPU())
+	for i := 0; i < allLen; i += chunk {
 		wg.Add(1)
-		r.runBatch(batch, wg)
+		h := int(math.Min(float64(i+chunk), float64(allLen)))
+		go r.runBatch(all[i:h], wg)
 	}
 	wg.Wait()
+
 	return nil
 }

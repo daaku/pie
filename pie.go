@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/pprof"
+
+	_ "github.com/surma/stacksignal"
 )
 
 var (
@@ -18,6 +20,7 @@ var (
 	filterRegexp = flag.String("filter", "", "file full path filter regexp")
 	batchSize    = flagbytes.Bytes("batch-size", "10mib", "approximate batch size in bytes")
 	cpuprofile   = flag.String("cpuprofile", "", "write cpu profile to file")
+	debug        = flag.Bool("debug", false, "enable debug mode")
 )
 
 func addFromStdin(r *pie.Run) {
@@ -84,6 +87,7 @@ func main() {
 	r := &pie.Run{
 		Root:      args[0],
 		BatchSize: *batchSize,
+		Debug:     *debug,
 	}
 	if *ignoreRegexp != "" {
 		r.FileIgnore = regexp.MustCompile(*ignoreRegexp)
