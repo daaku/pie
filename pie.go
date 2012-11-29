@@ -81,7 +81,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	r := &pie.Run{Root: args[0]}
+	r := &pie.Run{
+		Root:      args[0],
+		BatchSize: *batchSize,
+	}
 	if *ignoreRegexp != "" {
 		r.FileIgnore = regexp.MustCompile(*ignoreRegexp)
 	}

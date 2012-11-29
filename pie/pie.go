@@ -18,7 +18,7 @@ type Rule interface {
 type Run struct {
 	Root       string
 	Rule       []Rule
-	BatchSize  int64
+	BatchSize  uint64
 	FileIgnore *regexp.Regexp
 	FileFilter *regexp.Regexp
 }
@@ -97,7 +97,7 @@ func (r *Run) runBatch(items []*pathFileInfo, wg *sync.WaitGroup) {
 func (r *Run) Run() error {
 	wg := new(sync.WaitGroup)
 	var batch []*pathFileInfo
-	var batchSize int64
+	var batchSize uint64
 	filepath.Walk(
 		r.Root,
 		func(path string, info os.FileInfo, err error) error {
@@ -123,7 +123,7 @@ func (r *Run) Run() error {
 			if r.FileFilter != nil && !r.FileFilter.MatchString(path) {
 				return nil
 			}
-			batchSize += size
+			batchSize += uint64(size)
 			batch = append(batch, &pathFileInfo{path, info})
 			if batchSize > r.BatchSize {
 				wg.Add(1)
