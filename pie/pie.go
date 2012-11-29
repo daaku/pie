@@ -1,13 +1,13 @@
 package pie
 
 import (
-	"code.google.com/p/rog-go/parallel"
 	"fmt"
 	"io/ioutil"
 	"launchpad.net/gommap"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sync"
 )
 
 type Rule interface {
@@ -83,21 +83,20 @@ func (r *Run) RunFile(path string, info os.FileInfo) error {
 	return nil
 }
 
-func (r *Run) runBatch(items []*pathFileInfo) func() error {
-	return func() error {
-		var err error
-		for _, i := range items {
-			err = r.RunFile(i.Path, i.Info)
-			if err != nil {
-				return err
-			}
+func (r *Run) runBatch(items []*pathFileInfo, wg *sync.WaitGroup) {
+	var err error
+	for _, i := range items {
+		err = r.RunFile(i.Path, i.Info)
+		if err != nil {
+			fmt.Fprint(os.Stderr, err)
+			os.Exit(1)
 		}
-		return nil
 	}
+	wg.Done()
 }
 
 func (r *Run) Run() error {
-	run := parallel.NewRun(r.Parallel)
+	wg := new(sync.WaitGroup)
 	var batch []*pathFileInfo
 	var batchSize int64
 	filepath.Walk(
@@ -128,14 +127,17 @@ func (r *Run) Run() error {
 			batchSize += size
 			batch = append(batch, &pathFileInfo{path, info})
 			if batchSize > r.BatchSize {
-				run.Do(r.runBatch(batch))
+				wg.Add(1)
+				go r.runBatch(batch, wg)
 				batchSize = 0
 				batch = nil
 			}
 			return nil
 		})
 	if batch != nil {
-		run.Do(r.runBatch(batch))
+		wg.Add(1)
+		r.runBatch(batch, wg)
 	}
-	return run.Wait()
+	wg.Wait()
+	return nil
 }
