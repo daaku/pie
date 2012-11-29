@@ -185,3 +185,38 @@ func TestAll(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkBase(b *testing.B) {
+	b.StopTimer()
+	for i := 0; i < b.N; i++ {
+		test := cases[0]
+		tmp, err := test.MakeTempCopy()
+		if err != nil {
+			b.Fatalf("faled to make temp copy for %s: %s", test.Name, err)
+		}
+		run := &pie.Run{
+			Root:       tmp,
+			Parallel:   test.Parallel,
+			Rule:       test.Rule,
+			FileIgnore: test.FileIgnore,
+			FileFilter: test.FileFilter,
+			BatchSize:  10000,
+		}
+		b.StartTimer()
+		err = run.Run()
+		b.StopTimer()
+		if err != nil {
+			b.Fatalf("run for %s failed: %s", test.Name, err)
+		}
+		same, err := test.Compare(tmp)
+		if err != nil {
+			b.Fatalf("compare for %s failed: %s", test.Name, err)
+		}
+		if !same {
+			b.Fatalf("did not get expected result for %s", test.Name)
+		}
+		if *removeTemp {
+			os.RemoveAll(tmp)
+		}
+	}
+}
