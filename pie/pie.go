@@ -18,7 +18,6 @@ type Rule interface {
 type Run struct {
 	Root       string
 	Rule       []Rule
-	Parallel   int
 	BatchSize  int64
 	FileIgnore *regexp.Regexp
 	FileFilter *regexp.Regexp

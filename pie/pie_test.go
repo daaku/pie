@@ -19,7 +19,6 @@ var removeTemp = flag.Bool("remove-temp", true, "remove temp copies of test data
 
 type TestCase struct {
 	Name       string
-	Parallel   int
 	Rule       []pie.Rule
 	FileIgnore *regexp.Regexp
 	FileFilter *regexp.Regexp
@@ -27,8 +26,7 @@ type TestCase struct {
 
 var cases = []TestCase{
 	TestCase{
-		Name:     "base",
-		Parallel: 1,
+		Name: "base",
 		Rule: []pie.Rule{
 			&pie.ReplaceAll{
 				Target: regexp.MustCompile("hello"),
@@ -37,8 +35,7 @@ var cases = []TestCase{
 		},
 	},
 	TestCase{
-		Name:     "base",
-		Parallel: 2,
+		Name: "base",
 		Rule: []pie.Rule{
 			&pie.ReplaceAll{
 				Target: regexp.MustCompile("hello"),
@@ -47,8 +44,7 @@ var cases = []TestCase{
 		},
 	},
 	TestCase{
-		Name:     "empty-file",
-		Parallel: 2,
+		Name: "empty-file",
 		Rule: []pie.Rule{
 			&pie.ReplaceAll{
 				Target: regexp.MustCompile("hello"),
@@ -57,8 +53,7 @@ var cases = []TestCase{
 		},
 	},
 	TestCase{
-		Name:     "ignore-git",
-		Parallel: 2,
+		Name: "ignore-git",
 		Rule: []pie.Rule{
 			&pie.ReplaceAll{
 				Target: regexp.MustCompile("hello"),
@@ -67,8 +62,7 @@ var cases = []TestCase{
 		},
 	},
 	TestCase{
-		Name:     "ignore-symlink",
-		Parallel: 2,
+		Name: "ignore-symlink",
 		Rule: []pie.Rule{
 			&pie.ReplaceAll{
 				Target: regexp.MustCompile("hello"),
@@ -78,7 +72,6 @@ var cases = []TestCase{
 	},
 	TestCase{
 		Name:       "file-ignore",
-		Parallel:   2,
 		FileIgnore: regexp.MustCompile("foo"),
 		Rule: []pie.Rule{
 			&pie.ReplaceAll{
@@ -89,7 +82,6 @@ var cases = []TestCase{
 	},
 	TestCase{
 		Name:       "file-filter",
-		Parallel:   2,
 		FileFilter: regexp.MustCompile("(a|b)$"),
 		Rule: []pie.Rule{
 			&pie.ReplaceAll{
@@ -163,7 +155,6 @@ func TestAll(t *testing.T) {
 		}
 		run := &pie.Run{
 			Root:       tmp,
-			Parallel:   test.Parallel,
 			Rule:       test.Rule,
 			FileIgnore: test.FileIgnore,
 			FileFilter: test.FileFilter,
@@ -196,7 +187,6 @@ func BenchmarkBase(b *testing.B) {
 		}
 		run := &pie.Run{
 			Root:       tmp,
-			Parallel:   test.Parallel,
 			Rule:       test.Rule,
 			FileIgnore: test.FileIgnore,
 			FileFilter: test.FileFilter,

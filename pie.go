@@ -14,7 +14,6 @@ import (
 
 var (
 	goMaxProcs   = flag.Int("gomaxprocs", runtime.NumCPU(), "gomaxprocs")
-	parallelSize = flag.Int("parallel", runtime.NumCPU(), "number of goroutines")
 	ignoreRegexp = flag.String("ignore", "", "file full path ignore regexp")
 	filterRegexp = flag.String("filter", "", "file full path filter regexp")
 	batchSize    = flagbytes.Bytes("batch-size", "100mb", "approximate batch size in bytes")
@@ -82,10 +81,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	r := &pie.Run{
-		Root:     args[0],
-		Parallel: *parallelSize,
-	}
+	r := &pie.Run{Root: args[0]}
 	if *ignoreRegexp != "" {
 		r.FileIgnore = regexp.MustCompile(*ignoreRegexp)
 	}
