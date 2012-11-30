@@ -1,6 +1,7 @@
 package pie
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"launchpad.net/gommap"
@@ -42,6 +43,14 @@ func (r *Run) runFile(compiledInstructions []CompiledInstruction, path string, i
 	mapped, err := gommap.Map(file.Fd(), gommap.PROT_READ, gommap.MAP_SHARED)
 	if err != nil {
 		return fmt.Errorf("error mmaping file %s: %s", path, err)
+	}
+	if isBinary(mapped) {
+		if r.Debug {
+			fmt.Print("s")
+		}
+		mapped.UnsafeUnmap()
+		file.Close()
+		return nil
 	}
 	var out []byte
 	changed := false
@@ -194,4 +203,11 @@ func min(x, y int) int {
 		return x
 	}
 	return y
+}
+
+// based on buffer_is_binary in git
+func isBinary(d []byte) bool {
+	const firstFewBytes = 8000
+	limit := min(firstFewBytes, len(d))
+	return bytes.IndexByte(d[0:limit], byte(0)) != -1
 }
