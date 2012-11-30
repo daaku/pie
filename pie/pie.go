@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"launchpad.net/gommap"
-	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -181,10 +180,17 @@ func (r *Run) Run() error {
 	h := 0
 	for i := 0; i < allLen; i += chunk {
 		wg.Add(1)
-		h = int(math.Min(float64(i+chunk), float64(allLen)))
+		h = min(i+chunk, allLen)
 		go r.runBatch(all[i:h], wg)
 	}
 	wg.Wait()
 
 	return nil
+}
+
+func min(x, y int) int {
+	if x <= y {
+		return x
+	}
+	return y
 }
