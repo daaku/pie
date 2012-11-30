@@ -29,6 +29,7 @@ type Run struct {
 	FileIgnore  *regexp.Regexp
 	FileFilter  *regexp.Regexp
 	Debug       bool
+	jobSize     uint64
 }
 
 func (r *Run) RunFile(compiledInstructions []CompiledInstruction, path string, info os.FileInfo) error {
@@ -141,7 +142,7 @@ func (r *Run) Run() error {
 			if info.Mode()&os.ModeSymlink != 0 {
 				return nil
 			}
-			size := info.Size()
+			size := uint64(info.Size())
 			if size == 0 {
 				return nil
 			}
@@ -151,7 +152,8 @@ func (r *Run) Run() error {
 			if r.FileFilter != nil && !r.FileFilter.MatchString(path) {
 				return nil
 			}
-			batchSize += uint64(size)
+			batchSize += size
+			r.jobSize += size
 			batch = append(batch, &pathFileInfo{path, info})
 			if batchSize > batchUnitTarget {
 				all = append(all, batch)
@@ -162,6 +164,9 @@ func (r *Run) Run() error {
 		})
 	if batch != nil {
 		all = append(all, batch)
+	}
+	if r.Debug {
+		fmt.Printf("job size: %d", r.jobSize)
 	}
 
 	allLen := len(all)
