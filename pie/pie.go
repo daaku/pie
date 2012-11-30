@@ -32,7 +32,7 @@ type Run struct {
 	jobSize     uint64
 }
 
-func (r *Run) RunFile(compiledInstructions []CompiledInstruction, path string, info os.FileInfo) error {
+func (r *Run) runFile(compiledInstructions []CompiledInstruction, path string, info os.FileInfo) error {
 	if r.Debug {
 		fmt.Print("f")
 	}
@@ -111,7 +111,7 @@ func (r *Run) runBatch(items [][]*pathFileInfo, wg *sync.WaitGroup) {
 	}
 	for _, o := range items {
 		for _, i := range o {
-			err = r.RunFile(compiledInstructions, i.Path, i.Info)
+			err = r.runFile(compiledInstructions, i.Path, i.Info)
 			if err != nil {
 				fmt.Fprint(os.Stderr, err)
 				os.Exit(1)
