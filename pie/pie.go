@@ -172,13 +172,13 @@ func (r *Run) Run() error {
 
 	allLen := len(all)
 	chunk := int(allLen / runtime.NumCPU())
-	if allLen < 2 {
+	if allLen < 2 || chunk == 0 {
 		r.runBatch(all, nil)
 		return nil
 	}
 
-	h := 0
 	wg := new(sync.WaitGroup)
+	h := 0
 	for i := 0; i < allLen; i += chunk {
 		wg.Add(1)
 		h = int(math.Min(float64(i+chunk), float64(allLen)))
