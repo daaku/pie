@@ -29,6 +29,7 @@ type Run struct {
 	FileIgnore  *regexp.Regexp
 	FileFilter  *regexp.Regexp
 	Debug       bool
+	ListOnly    bool
 	jobSize     uint64
 }
 
@@ -48,6 +49,12 @@ func (r *Run) runFile(compiledInstructions []CompiledInstruction, path string, i
 		if r.Debug {
 			fmt.Print("s")
 		}
+		mapped.UnsafeUnmap()
+		file.Close()
+		return nil
+	}
+	if r.ListOnly {
+		fmt.Println(path)
 		mapped.UnsafeUnmap()
 		file.Close()
 		return nil
