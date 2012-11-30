@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/csv"
 	"flag"
 	"fmt"
 	"github.com/daaku/pie/pie"
@@ -21,35 +20,6 @@ var (
 	debug        = flag.Bool("debug", false, "enable debug mode")
 	listOnly     = flag.Bool("list-only", false, "only list target files")
 )
-
-func addFromStdin(r *pie.Run) {
-	reader := csv.NewReader(os.Stdin)
-	reader.Comma = '\t'
-	reader.Comment = '#'
-	reader.FieldsPerRecord = 2
-	reader.LazyQuotes = true
-	reader.TrimLeadingSpace = true
-	instructions, err := reader.ReadAll()
-	if err != nil {
-		panic(fmt.Sprintf("failed reading instructions from stdin: %s", err))
-	}
-	for _, instruction := range instructions {
-		r.Instruction = append(r.Instruction, &pie.ReplaceAll{
-			Target: instruction[0],
-			Repl:   []byte(instruction[1]),
-		})
-	}
-}
-
-func addFromArgs(r *pie.Run, args []string) {
-	argl := len(args)
-	for x := 1; x < argl; x = x + 2 {
-		r.Instruction = append(r.Instruction, &pie.ReplaceAll{
-			Target: args[x],
-			Repl:   []byte(args[x+1]),
-		})
-	}
-}
 
 func main() {
 	flag.Usage = func() {
@@ -94,17 +64,23 @@ func main() {
 	if *filterRegexp != "" {
 		r.FileFilter = regexp.MustCompile(*filterRegexp)
 	}
+
+	var err error
 	if argl < 3 {
-		addFromStdin(r)
+		r.Instruction, err = pie.InstructionFromReader(os.Stdin)
 	} else {
-		addFromArgs(r, args)
+		r.Instruction, err = pie.InstructionFromArgs(args)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %s\n", err)
+		os.Exit(1)
 	}
 	if len(r.Instruction) == 0 {
 		fmt.Fprintf(os.Stderr, "error: no instructions provided on the command line or via stdin\n")
 		flag.Usage()
 		os.Exit(1)
 	}
-	err := r.Run()
+	err = r.Run()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)
