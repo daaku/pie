@@ -47,6 +47,7 @@ func (r *Run) RunFile(compiledInstructions []CompiledInstruction, path string, i
 	var out []byte
 	changed := false
 	for _, compiledInstruction := range compiledInstructions {
+		runtime.Gosched()
 		if r.Debug {
 			fmt.Print("r")
 		}
