@@ -80,11 +80,13 @@ func (r *Run) runFile(compiledInstructions []CompiledInstruction, path string, i
 			changed = true
 			mapped.UnsafeUnmap()
 			file.Close()
+			runtime.GC()
 		} else {
 			if !compiledInstruction.Match(out) {
 				continue
 			}
 			out = compiledInstruction.Apply(out)
+			runtime.GC()
 		}
 	}
 	if changed {
@@ -96,7 +98,6 @@ func (r *Run) runFile(compiledInstructions []CompiledInstruction, path string, i
 		if err != nil {
 			return fmt.Errorf("error writing new file %s: %s", path, err)
 		}
-		runtime.GC()
 	} else {
 		mapped.UnsafeUnmap()
 		file.Close()
