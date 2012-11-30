@@ -75,6 +75,7 @@ func (r *Run) runFile(compiledInstructions []CompiledInstruction, path string, i
 		if err != nil {
 			return fmt.Errorf("error writing new file %s: %s", path, err)
 		}
+		runtime.GC()
 	} else {
 		mapped.UnsafeUnmap()
 		file.Close()
