@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"launchpad.net/gommap"
 	"os"
-	"runtime"
 )
 
 type file struct {
@@ -14,7 +13,7 @@ type file struct {
 	Info os.FileInfo
 }
 
-func (f *file) Run(compiledInstructions []CompiledInstruction) error {
+func (f file) Run(compiledInstructions []CompiledInstruction) error {
 	file, err := os.Open(f.Path)
 	if err != nil {
 		return fmt.Errorf("error opening file %s: %s", f.Path, err)
@@ -31,7 +30,6 @@ func (f *file) Run(compiledInstructions []CompiledInstruction) error {
 	var out []byte
 	changed := false
 	for _, compiledInstruction := range compiledInstructions {
-		runtime.Gosched()
 		// optimize for no changes to just work with mmaped file
 		if !changed {
 			if !compiledInstruction.Match(mapped) {
@@ -41,13 +39,11 @@ func (f *file) Run(compiledInstructions []CompiledInstruction) error {
 			changed = true
 			mapped.UnsafeUnmap()
 			file.Close()
-			runtime.GC()
 		} else {
 			if !compiledInstruction.Match(out) {
 				continue
 			}
 			out = compiledInstruction.Apply(out)
-			runtime.GC()
 		}
 	}
 	if changed {

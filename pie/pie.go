@@ -16,7 +16,6 @@ type Run struct {
 	Instruction []Instruction
 	FileIgnore  *regexp.Regexp
 	FileFilter  *regexp.Regexp
-	jobSize     uint64
 }
 
 func (r *Run) compileInstruction() ([]CompiledInstruction, error) {
@@ -31,31 +30,33 @@ func (r *Run) compileInstruction() ([]CompiledInstruction, error) {
 	return compiledInstructions, nil
 }
 
-func (r *Run) runBatch(items [][]*file, wg *sync.WaitGroup) {
+func (r *Run) worker(work chan file, wg *sync.WaitGroup) {
 	compiledInstructions, err := r.compileInstruction()
 	if err != nil {
 		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
 	}
-	for _, o := range items {
-		for _, i := range o {
-			err = i.Run(compiledInstructions)
-			if err != nil {
-				fmt.Fprint(os.Stderr, err)
-				os.Exit(1)
-			}
+	for {
+		f, ok := <-work
+		if !ok {
+			fmt.Println("closing worker")
+			return
 		}
-	}
-	if wg != nil {
+		err = f.Run(compiledInstructions)
+		if err != nil {
+			fmt.Fprint(os.Stderr, err)
+			os.Exit(1)
+		}
 		wg.Done()
 	}
 }
 
 func (r *Run) Run() error {
-	const batchUnitTarget = 1048576 // 1 mb
-	var all [][]*file
-	var batch []*file
-	var batchSize uint64
+	work := make(chan file)
+	wg := new(sync.WaitGroup)
+	for i := 0; i < runtime.NumCPU(); i++ {
+		go r.worker(work, wg)
+	}
 	filepath.Walk(
 		r.Root,
 		func(path string, info os.FileInfo, err error) error {
@@ -71,8 +72,7 @@ func (r *Run) Run() error {
 			if info.Mode()&os.ModeSymlink != 0 {
 				return nil
 			}
-			size := uint64(info.Size())
-			if size == 0 {
+			if info.Size() == 0 {
 				return nil
 			}
 			if r.FileIgnore != nil && r.FileIgnore.MatchString(path) {
@@ -81,36 +81,12 @@ func (r *Run) Run() error {
 			if r.FileFilter != nil && !r.FileFilter.MatchString(path) {
 				return nil
 			}
-			batchSize += size
-			r.jobSize += size
-			batch = append(batch, &file{path, info})
-			if batchSize > batchUnitTarget {
-				all = append(all, batch)
-				batchSize = 0
-				batch = nil
-			}
+			wg.Add(1)
+			work <- file{path, info}
 			return nil
 		})
-	if batch != nil {
-		all = append(all, batch)
-	}
-
-	allLen := len(all)
-	chunk := int(allLen / runtime.NumCPU())
-	if allLen < 2 || chunk == 0 {
-		r.runBatch(all, nil)
-		return nil
-	}
-
-	wg := new(sync.WaitGroup)
-	h := 0
-	for i := 0; i < allLen; i += chunk {
-		wg.Add(1)
-		h = min(i+chunk, allLen)
-		go r.runBatch(all[i:h], wg)
-	}
 	wg.Wait()
-
+	close(work)
 	return nil
 }
 
