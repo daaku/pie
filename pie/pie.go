@@ -16,8 +16,6 @@ type Run struct {
 	Instruction []Instruction
 	FileIgnore  *regexp.Regexp
 	FileFilter  *regexp.Regexp
-	Debug       bool
-	ListOnly    bool
 	jobSize     uint64
 }
 
@@ -34,9 +32,6 @@ func (r *Run) compileInstruction() ([]CompiledInstruction, error) {
 }
 
 func (r *Run) runBatch(items [][]*file, wg *sync.WaitGroup) {
-	if r.Debug {
-		fmt.Print("b")
-	}
 	compiledInstructions, err := r.compileInstruction()
 	if err != nil {
 		fmt.Fprint(os.Stderr, err)
@@ -88,7 +83,7 @@ func (r *Run) Run() error {
 			}
 			batchSize += size
 			r.jobSize += size
-			batch = append(batch, &file{path, info, r.Debug})
+			batch = append(batch, &file{path, info})
 			if batchSize > batchUnitTarget {
 				all = append(all, batch)
 				batchSize = 0
@@ -98,9 +93,6 @@ func (r *Run) Run() error {
 		})
 	if batch != nil {
 		all = append(all, batch)
-	}
-	if r.Debug {
-		fmt.Printf("job size: %d", r.jobSize)
 	}
 
 	allLen := len(all)

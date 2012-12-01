@@ -17,8 +17,6 @@ var (
 	ignoreRegexp = flag.String("ignore", "", "file full path ignore regexp")
 	filterRegexp = flag.String("filter", "", "file full path filter regexp")
 	cpuprofile   = flag.String("cpuprofile", "", "write cpu profile to file")
-	debug        = flag.Bool("debug", false, "enable debug mode")
-	listOnly     = flag.Bool("list-only", false, "only list target files")
 )
 
 func main() {
@@ -54,9 +52,7 @@ func main() {
 	}
 
 	r := &pie.Run{
-		Root:     args[0],
-		Debug:    *debug,
-		ListOnly: *listOnly,
+		Root: args[0],
 	}
 	if *ignoreRegexp != "" {
 		r.FileIgnore = regexp.MustCompile(*ignoreRegexp)

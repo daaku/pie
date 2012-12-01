@@ -10,15 +10,11 @@ import (
 )
 
 type file struct {
-	Path  string
-	Info  os.FileInfo
-	Debug bool
+	Path string
+	Info os.FileInfo
 }
 
 func (f *file) Run(compiledInstructions []CompiledInstruction) error {
-	if f.Debug {
-		fmt.Print("f")
-	}
 	file, err := os.Open(f.Path)
 	if err != nil {
 		return fmt.Errorf("error opening file %s: %s", f.Path, err)
@@ -28,9 +24,6 @@ func (f *file) Run(compiledInstructions []CompiledInstruction) error {
 		return fmt.Errorf("error mmaping file %s: %s", f.Path, err)
 	}
 	if isBinary(mapped) {
-		if f.Debug {
-			fmt.Print("s")
-		}
 		mapped.UnsafeUnmap()
 		file.Close()
 		return nil
@@ -39,9 +32,6 @@ func (f *file) Run(compiledInstructions []CompiledInstruction) error {
 	changed := false
 	for _, compiledInstruction := range compiledInstructions {
 		runtime.Gosched()
-		if f.Debug {
-			fmt.Print("r")
-		}
 		// optimize for no changes to just work with mmaped file
 		if !changed {
 			if !compiledInstruction.Match(mapped) {
