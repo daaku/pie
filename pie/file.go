@@ -2,6 +2,7 @@
 package pie
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"launchpad.net/gommap"
@@ -60,4 +61,18 @@ func (f file) Run(compiledInstructions []CompiledInstruction) error {
 		file.Close()
 	}
 	return nil
+}
+
+func min(x, y int) int {
+	if x <= y {
+		return x
+	}
+	return y
+}
+
+// based on buffer_is_binary in git
+func isBinary(d []byte) bool {
+	const firstFewBytes = 8000
+	limit := min(firstFewBytes, len(d))
+	return bytes.IndexByte(d[0:limit], byte(0)) != -1
 }

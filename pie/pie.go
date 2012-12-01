@@ -2,7 +2,6 @@
 package pie
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,7 +38,6 @@ func (r *Run) worker(work chan file, wg *sync.WaitGroup) {
 	for {
 		f, ok := <-work
 		if !ok {
-			fmt.Println("closing worker")
 			return
 		}
 		err = f.Run(compiledInstructions)
@@ -88,18 +86,4 @@ func (r *Run) Run() error {
 	wg.Wait()
 	close(work)
 	return nil
-}
-
-func min(x, y int) int {
-	if x <= y {
-		return x
-	}
-	return y
-}
-
-// based on buffer_is_binary in git
-func isBinary(d []byte) bool {
-	const firstFewBytes = 8000
-	limit := min(firstFewBytes, len(d))
-	return bytes.IndexByte(d[0:limit], byte(0)) != -1
 }
