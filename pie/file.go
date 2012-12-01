@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"launchpad.net/gommap"
 	"os"
 )
 
@@ -19,33 +18,21 @@ func (f file) Run(compiledInstructions []CompiledInstruction) error {
 	if err != nil {
 		return fmt.Errorf("error opening file %s: %s", f.Path, err)
 	}
-	mapped, err := gommap.Map(file.Fd(), gommap.PROT_READ, gommap.MAP_SHARED)
-	if err != nil {
-		return fmt.Errorf("error mmaping file %s: %s", f.Path, err)
-	}
-	if isBinary(mapped) {
-		mapped.UnsafeUnmap()
-		file.Close()
+	defer file.Close()
+	if isBinary(file) {
 		return nil
 	}
-	var out []byte
+	out, err := ioutil.ReadAll(file)
+	if err != nil {
+		return fmt.Errorf("error reading file %s: %s", f.Path, err)
+	}
 	changed := false
 	for _, compiledInstruction := range compiledInstructions {
-		// optimize for no changes to just work with mmaped file
-		if !changed {
-			if !compiledInstruction.Match(mapped) {
-				continue
-			}
-			out = compiledInstruction.Apply(mapped)
-			changed = true
-			mapped.UnsafeUnmap()
-			file.Close()
-		} else {
-			if !compiledInstruction.Match(out) {
-				continue
-			}
-			out = compiledInstruction.Apply(out)
+		if !compiledInstruction.Match(out) {
+			continue
 		}
+		out = compiledInstruction.Apply(out)
+		changed = true
 	}
 	if changed {
 		err := os.Remove(f.Path)
@@ -56,9 +43,6 @@ func (f file) Run(compiledInstructions []CompiledInstruction) error {
 		if err != nil {
 			return fmt.Errorf("error writing new file %s: %s", f.Path, err)
 		}
-	} else {
-		mapped.UnsafeUnmap()
-		file.Close()
 	}
 	return nil
 }
@@ -71,8 +55,10 @@ func min(x, y int) int {
 }
 
 // based on buffer_is_binary in git
-func isBinary(d []byte) bool {
+func isBinary(f *os.File) bool {
 	const firstFewBytes = 8000
-	limit := min(firstFewBytes, len(d))
+	d := make([]byte, firstFewBytes)
+	limit, _ := f.Read(d)
+	f.Seek(0, 0)
 	return bytes.IndexByte(d[0:limit], byte(0)) != -1
 }

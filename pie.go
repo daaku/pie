@@ -8,8 +8,6 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/pprof"
-
-	_ "github.com/surma/stacksignal"
 )
 
 var (

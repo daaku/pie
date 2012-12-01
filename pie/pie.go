@@ -50,7 +50,7 @@ func (r *Run) worker(work chan file, wg *sync.WaitGroup) {
 }
 
 func (r *Run) Run() error {
-	work := make(chan file)
+	work := make(chan file, 500)
 	wg := new(sync.WaitGroup)
 	for i := 0; i < runtime.NumCPU(); i++ {
 		go r.worker(work, wg)
