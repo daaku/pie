@@ -4,8 +4,6 @@ package pie
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
-	"launchpad.net/gommap"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -23,73 +21,6 @@ type Run struct {
 	jobSize     uint64
 }
 
-func (r *Run) runFile(compiledInstructions []CompiledInstruction, path string, info os.FileInfo) error {
-	if r.Debug {
-		fmt.Print("f")
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		return fmt.Errorf("error opening file %s: %s", path, err)
-	}
-	mapped, err := gommap.Map(file.Fd(), gommap.PROT_READ, gommap.MAP_SHARED)
-	if err != nil {
-		return fmt.Errorf("error mmaping file %s: %s", path, err)
-	}
-	if isBinary(mapped) {
-		if r.Debug {
-			fmt.Print("s")
-		}
-		mapped.UnsafeUnmap()
-		file.Close()
-		return nil
-	}
-	if r.ListOnly {
-		fmt.Println(path)
-		mapped.UnsafeUnmap()
-		file.Close()
-		return nil
-	}
-	var out []byte
-	changed := false
-	for _, compiledInstruction := range compiledInstructions {
-		runtime.Gosched()
-		if r.Debug {
-			fmt.Print("r")
-		}
-		// optimize for no changes to just work with mmaped file
-		if !changed {
-			if !compiledInstruction.Match(mapped) {
-				continue
-			}
-			out = compiledInstruction.Apply(mapped)
-			changed = true
-			mapped.UnsafeUnmap()
-			file.Close()
-			runtime.GC()
-		} else {
-			if !compiledInstruction.Match(out) {
-				continue
-			}
-			out = compiledInstruction.Apply(out)
-			runtime.GC()
-		}
-	}
-	if changed {
-		err := os.Remove(path)
-		if err != nil {
-			return fmt.Errorf("error removing old file %s: %s", path, err)
-		}
-		err = ioutil.WriteFile(path, out, info.Mode())
-		if err != nil {
-			return fmt.Errorf("error writing new file %s: %s", path, err)
-		}
-	} else {
-		mapped.UnsafeUnmap()
-		file.Close()
-	}
-	return nil
-}
-
 func (r *Run) compileInstruction() ([]CompiledInstruction, error) {
 	compiledInstructions := make([]CompiledInstruction, len(r.Instruction))
 	var err error
@@ -102,12 +33,7 @@ func (r *Run) compileInstruction() ([]CompiledInstruction, error) {
 	return compiledInstructions, nil
 }
 
-type pathFileInfo struct {
-	Path string
-	Info os.FileInfo
-}
-
-func (r *Run) runBatch(items [][]*pathFileInfo, wg *sync.WaitGroup) {
+func (r *Run) runBatch(items [][]*file, wg *sync.WaitGroup) {
 	if r.Debug {
 		fmt.Print("b")
 	}
@@ -118,7 +44,7 @@ func (r *Run) runBatch(items [][]*pathFileInfo, wg *sync.WaitGroup) {
 	}
 	for _, o := range items {
 		for _, i := range o {
-			err = r.runFile(compiledInstructions, i.Path, i.Info)
+			err = i.Run(compiledInstructions)
 			if err != nil {
 				fmt.Fprint(os.Stderr, err)
 				os.Exit(1)
@@ -132,8 +58,8 @@ func (r *Run) runBatch(items [][]*pathFileInfo, wg *sync.WaitGroup) {
 
 func (r *Run) Run() error {
 	const batchUnitTarget = 1048576 // 1 mb
-	var all [][]*pathFileInfo
-	var batch []*pathFileInfo
+	var all [][]*file
+	var batch []*file
 	var batchSize uint64
 	filepath.Walk(
 		r.Root,
@@ -162,7 +88,7 @@ func (r *Run) Run() error {
 			}
 			batchSize += size
 			r.jobSize += size
-			batch = append(batch, &pathFileInfo{path, info})
+			batch = append(batch, &file{path, info, r.Debug})
 			if batchSize > batchUnitTarget {
 				all = append(all, batch)
 				batchSize = 0
