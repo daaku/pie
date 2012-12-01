@@ -137,7 +137,7 @@ func GetDataDir() string {
 	return pkg.Dir
 }
 
-func TestAll(t *testing.T) {
+func TestRun(t *testing.T) {
 	t.Parallel()
 	for _, test := range cases {
 		tmp, err := test.MakeTempCopy()
@@ -164,6 +164,42 @@ func TestAll(t *testing.T) {
 		if *removeTemp {
 			os.RemoveAll(tmp)
 		}
+	}
+}
+
+func TestInstructionFromReader(t *testing.T) {
+	input := bytes.NewBufferString("a\tb\nc\td")
+	i, err := pie.InstructionFromReader(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(i) != 2 {
+		t.Fatalf("was expecting 2 instructions but got %d", len(i))
+	}
+}
+
+func TestInstructionFromReaderError(t *testing.T) {
+	input := bytes.NewBufferString("a\tb\nc")
+	_, err := pie.InstructionFromReader(input)
+	if err == nil {
+		t.Fatal("was expecting an error")
+	}
+}
+
+func TestInstructionFromArgs(t *testing.T) {
+	i, err := pie.InstructionFromArgs([]string{"a", "b", "c", "d"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(i) != 2 {
+		t.Fatalf("was expecting 2 instructions but got %d", len(i))
+	}
+}
+
+func TestInstructionFromArgsPairError(t *testing.T) {
+	_, err := pie.InstructionFromArgs([]string{"a"})
+	if err == nil {
+		t.Fatal("was expecting an error")
 	}
 }
 

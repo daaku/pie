@@ -69,7 +69,7 @@ func main() {
 	if argl < 3 {
 		r.Instruction, err = pie.InstructionFromReader(os.Stdin)
 	} else {
-		r.Instruction, err = pie.InstructionFromArgs(args)
+		r.Instruction, err = pie.InstructionFromArgs(args[1:argl])
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)

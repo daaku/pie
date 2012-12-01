@@ -2,8 +2,11 @@ package pie
 
 import (
 	"encoding/csv"
+	"errors"
 	"io"
 )
+
+var errRequirePairs = errors.New("argments should be pairs of regexp and replacement")
 
 // Instructions describe the modification. Instructions are compiled once for
 // parallel goroutine of execution allowing some per goroutine work.
@@ -44,7 +47,10 @@ func InstructionFromReader(r io.Reader) (result []Instruction, err error) {
 // Parses args as pairs of regex and replace pattern.
 func InstructionFromArgs(args []string) (result []Instruction, err error) {
 	argl := len(args)
-	for x := 1; x < argl; x = x + 2 {
+	if argl%2 != 0 {
+		return nil, errRequirePairs
+	}
+	for x := 0; x < argl; x = x + 2 {
 		result = append(result, &ReplaceAll{
 			Target: args[x],
 			Repl:   []byte(args[x+1]),
