@@ -35,6 +35,7 @@ func (f file) Run(compiledInstructions []CompiledInstruction) error {
 		changed = true
 	}
 	if changed {
+		file.Close()
 		err := os.Remove(f.Path)
 		if err != nil {
 			return fmt.Errorf("error removing old file %s: %s", f.Path, err)

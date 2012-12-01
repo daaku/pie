@@ -29,31 +29,29 @@ func (r *Run) compileInstruction() ([]CompiledInstruction, error) {
 	return compiledInstructions, nil
 }
 
-func (r *Run) worker(work chan file, wg *sync.WaitGroup) {
+func (r *Run) worker(work chan file) {
 	compiledInstructions, err := r.compileInstruction()
 	if err != nil {
 		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
 	}
-	for {
-		f, ok := <-work
-		if !ok {
-			return
-		}
-		err = f.Run(compiledInstructions)
-		if err != nil {
+	for f := range work {
+		if err = f.Run(compiledInstructions); err != nil {
 			fmt.Fprint(os.Stderr, err)
 			os.Exit(1)
 		}
-		wg.Done()
 	}
 }
 
 func (r *Run) Run() error {
-	work := make(chan file, 500)
+	work := make(chan file, runtime.NumCPU()*4)
 	wg := new(sync.WaitGroup)
-	for i := 0; i < runtime.NumCPU(); i++ {
-		go r.worker(work, wg)
+	for i := 0; i < runtime.NumCPU()*2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			r.worker(work)
+		}()
 	}
 	filepath.Walk(
 		r.Root,
@@ -79,11 +77,10 @@ func (r *Run) Run() error {
 			if r.FileFilter != nil && !r.FileFilter.MatchString(path) {
 				return nil
 			}
-			wg.Add(1)
 			work <- file{path, info}
 			return nil
 		})
-	wg.Wait()
 	close(work)
+	wg.Wait()
 	return nil
 }
