@@ -13,21 +13,6 @@ import (
 	"sync"
 )
 
-// Instructions describe the modification. Instructions are compiled once for
-// parallel goroutine of execution allowing some per goroutine work.
-type Instruction interface {
-	Compile() (CompiledInstruction, error)
-}
-
-// A compiled instruction is used repeatedly across files.
-type CompiledInstruction interface {
-	// This is called first to avoid copying data if there is not match.
-	Match(src []byte) bool
-
-	// This applies the instruction and returns a copy of the transformed data.
-	Apply(src []byte) []byte
-}
-
 type Run struct {
 	Root        string
 	Instruction []Instruction
