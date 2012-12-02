@@ -23,6 +23,8 @@ type CompiledInstruction interface {
 	Apply(src []byte) []byte
 }
 
+type CompiledInstructions []CompiledInstruction
+
 // Parses input as tab delemited pairs of regex and replace pattern.
 func InstructionFromReader(r io.Reader) (result []Instruction, err error) {
 	reader := csv.NewReader(r)
@@ -57,4 +59,18 @@ func InstructionFromArgs(args []string) (result []Instruction, err error) {
 		})
 	}
 	return result, nil
+}
+
+// Apply the instructions and return either the new data and a bool indicating
+// if any changes were made.
+func (c CompiledInstructions) Apply(input []byte) (out []byte, changed bool) {
+	out = input
+	for _, i := range c {
+		if !i.Match(out) {
+			continue
+		}
+		out = i.Apply(out)
+		changed = true
+	}
+	return
 }

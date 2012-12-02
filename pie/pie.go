@@ -17,8 +17,8 @@ type Run struct {
 	FileFilter  *regexp.Regexp
 }
 
-func (r *Run) compileInstruction() ([]CompiledInstruction, error) {
-	compiledInstructions := make([]CompiledInstruction, len(r.Instruction))
+func (r *Run) compileInstruction() (CompiledInstructions, error) {
+	compiledInstructions := make(CompiledInstructions, len(r.Instruction))
 	var err error
 	for i, instruction := range r.Instruction {
 		compiledInstructions[i], err = instruction.Compile()

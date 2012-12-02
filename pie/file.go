@@ -13,7 +13,7 @@ type file struct {
 	Info os.FileInfo
 }
 
-func (f file) Run(compiledInstructions []CompiledInstruction) error {
+func (f file) Run(i CompiledInstructions) error {
 	file, err := os.Open(f.Path)
 	if err != nil {
 		return fmt.Errorf("error opening file %s: %s", f.Path, err)
@@ -26,14 +26,7 @@ func (f file) Run(compiledInstructions []CompiledInstruction) error {
 	if err != nil {
 		return fmt.Errorf("error reading file %s: %s", f.Path, err)
 	}
-	changed := false
-	for _, compiledInstruction := range compiledInstructions {
-		if !compiledInstruction.Match(out) {
-			continue
-		}
-		out = compiledInstruction.Apply(out)
-		changed = true
-	}
+	out, changed := i.Apply(out)
 	if changed {
 		file.Close()
 		err := os.Remove(f.Path)
