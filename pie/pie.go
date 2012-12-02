@@ -29,14 +29,24 @@ func (r *Run) compileInstruction() (CompiledInstructions, error) {
 	return compiledInstructions, nil
 }
 
-func (r *Run) worker(work chan file) {
+func (r *Run) closer(work chan *os.File) {
+	var err error
+	for f := range work {
+		if err = f.Close(); err != nil {
+			fmt.Fprint(os.Stderr, "error closing file", err)
+			os.Exit(1)
+		}
+	}
+}
+
+func (r *Run) worker(work chan file, closer chan *os.File) {
 	compiledInstructions, err := r.compileInstruction()
 	if err != nil {
 		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
 	}
 	for f := range work {
-		if err = f.Run(compiledInstructions); err != nil {
+		if err = f.Run(compiledInstructions, closer); err != nil {
 			fmt.Fprint(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -45,12 +55,18 @@ func (r *Run) worker(work chan file) {
 
 func (r *Run) Run() error {
 	work := make(chan file, runtime.NumCPU()*4)
+	closer := make(chan *os.File, 10000)
+	for i := 0; i < 2; i++ {
+		// note currently we dont enforce closing of files and let the process die
+		// without explicitly closing the file
+		go r.closer(closer)
+	}
 	wg := new(sync.WaitGroup)
 	for i := 0; i < runtime.NumCPU()*2; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			r.worker(work)
+			r.worker(work, closer)
 		}()
 	}
 	filepath.Walk(
@@ -82,5 +98,6 @@ func (r *Run) Run() error {
 		})
 	close(work)
 	wg.Wait()
+	close(closer)
 	return nil
 }
