@@ -55,8 +55,9 @@ func (r *Run) worker(files []file) {
 		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
 	}
+	buf := make([]byte, r.maxFileSize)
 	for _, f := range files {
-		if err = f.Run(compiledInstructions); err != nil {
+		if err = f.Run(compiledInstructions, buf); err != nil {
 			fmt.Fprint(os.Stderr, err)
 			os.Exit(1)
 		}

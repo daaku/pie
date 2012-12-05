@@ -4,6 +4,7 @@ package pie
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 )
@@ -13,26 +14,37 @@ type file struct {
 	Info os.FileInfo
 }
 
-func (f file) Run(i CompiledInstructions) error {
+func (f file) Run(i CompiledInstructions, buf []byte) error {
 	file, err := os.Open(f.Path)
 	if err != nil {
 		return fmt.Errorf("error opening file %s: %s", f.Path, err)
 	}
 	defer file.Close()
-	if isBinary(file) {
+
+	const firstFewBytes = 8000
+	bufl := len(buf)
+	limit, err := file.Read(buf[0:min(bufl, firstFewBytes)])
+	if err != nil && err != io.EOF {
+		return err
+	}
+	if bytes.IndexByte(buf[0:limit], byte(0)) != -1 {
 		return nil
 	}
-	out, err := ioutil.ReadAll(file)
-	if err != nil {
-		return fmt.Errorf("error reading file %s: %s", f.Path, err)
+	if err == nil {
+		rest, err := file.Read(buf[limit:bufl])
+		if err != nil && err != io.EOF {
+			return err
+		}
+		limit += rest
 	}
-	out, changed := i.Apply(out)
+
+	buf, changed := i.Apply(buf[0:limit])
 	if changed {
 		err := os.Remove(f.Path)
 		if err != nil {
 			return fmt.Errorf("error removing old file %s: %s", f.Path, err)
 		}
-		err = ioutil.WriteFile(f.Path, out, f.Info.Mode())
+		err = ioutil.WriteFile(f.Path, buf, f.Info.Mode())
 		if err != nil {
 			return fmt.Errorf("error writing new file %s: %s", f.Path, err)
 		}
@@ -45,13 +57,4 @@ func min(x, y int) int {
 		return x
 	}
 	return y
-}
-
-// based on buffer_is_binary in git
-func isBinary(f *os.File) bool {
-	const firstFewBytes = 8000
-	d := make([]byte, firstFewBytes)
-	limit, _ := f.Read(d)
-	f.Seek(0, 0)
-	return bytes.IndexByte(d[0:limit], byte(0)) != -1
 }
