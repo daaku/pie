@@ -11,10 +11,30 @@ import (
 )
 
 type Run struct {
-	Root        string
-	Instruction []Instruction
-	FileIgnore  *regexp.Regexp
-	FileFilter  *regexp.Regexp
+	Root          string
+	Instruction   []Instruction
+	FileIgnore    *regexp.Regexp
+	FileFilter    *regexp.Regexp
+	NumWorkers    int
+	maxFileSize   int64
+	totalFileSize int64
+	file          []file
+}
+
+func (r *Run) numWorkers() int {
+	if r.NumWorkers > 0 {
+		return r.NumWorkers
+	}
+	return runtime.NumCPU() * 2
+}
+
+func (r *Run) approxBatchSize() int64 {
+	const hardMin = int64(1024000) // 1mb
+	size := r.totalFileSize / int64(r.numWorkers())
+	if hardMin > size {
+		return hardMin
+	}
+	return size
 }
 
 func (r *Run) compileInstruction() (CompiledInstructions, error) {
@@ -29,47 +49,22 @@ func (r *Run) compileInstruction() (CompiledInstructions, error) {
 	return compiledInstructions, nil
 }
 
-func (r *Run) closer(work chan *os.File) {
-	var err error
-	for f := range work {
-		if err = f.Close(); err != nil {
-			fmt.Fprint(os.Stderr, "error closing file", err)
-			os.Exit(1)
-		}
-	}
-}
-
-func (r *Run) worker(work chan file, closer chan *os.File) {
+func (r *Run) worker(files []file) {
 	compiledInstructions, err := r.compileInstruction()
 	if err != nil {
 		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
 	}
-	for f := range work {
-		if err = f.Run(compiledInstructions, closer); err != nil {
+	for _, f := range files {
+		if err = f.Run(compiledInstructions); err != nil {
 			fmt.Fprint(os.Stderr, err)
 			os.Exit(1)
 		}
 	}
 }
 
-func (r *Run) Run() error {
-	work := make(chan file, runtime.NumCPU()*4)
-	closer := make(chan *os.File, 10000)
-	for i := 0; i < 2; i++ {
-		// note currently we dont enforce closing of files and let the process die
-		// without explicitly closing the file
-		go r.closer(closer)
-	}
-	wg := new(sync.WaitGroup)
-	for i := 0; i < runtime.NumCPU()*2; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			r.worker(work, closer)
-		}()
-	}
-	filepath.Walk(
+func (r *Run) prepFiles() error {
+	return filepath.Walk(
 		r.Root,
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -84,7 +79,8 @@ func (r *Run) Run() error {
 			if info.Mode()&os.ModeSymlink != 0 {
 				return nil
 			}
-			if info.Size() == 0 {
+			size := info.Size()
+			if size == 0 {
 				return nil
 			}
 			if r.FileIgnore != nil && r.FileIgnore.MatchString(path) {
@@ -93,11 +89,38 @@ func (r *Run) Run() error {
 			if r.FileFilter != nil && !r.FileFilter.MatchString(path) {
 				return nil
 			}
-			work <- file{path, info}
+			if size > r.maxFileSize {
+				r.maxFileSize = size
+			}
+			r.totalFileSize += size
+			r.file = append(r.file, file{path, info})
 			return nil
 		})
-	close(work)
+}
+
+func (r *Run) Run() error {
+	if err := r.prepFiles(); err != nil {
+		return err
+	}
+
+	var wg sync.WaitGroup
+	approxBatchSize := r.approxBatchSize()
+	fileLen := len(r.file)
+	var batchSize int64
+	var start, end int
+	for end < fileLen {
+		for end < fileLen && batchSize < approxBatchSize {
+			batchSize += r.file[end].Info.Size()
+			end++
+		}
+		wg.Add(1)
+		go func(start, end int) {
+			defer wg.Done()
+			r.worker(r.file[start:end])
+		}(start, end)
+		start = end
+		batchSize = 0
+	}
 	wg.Wait()
-	close(closer)
 	return nil
 }

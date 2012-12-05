@@ -13,12 +13,12 @@ type file struct {
 	Info os.FileInfo
 }
 
-func (f file) Run(i CompiledInstructions, closer chan *os.File) error {
+func (f file) Run(i CompiledInstructions) error {
 	file, err := os.Open(f.Path)
 	if err != nil {
 		return fmt.Errorf("error opening file %s: %s", f.Path, err)
 	}
-	defer func() { closer <- file }()
+	defer file.Close()
 	if isBinary(file) {
 		return nil
 	}
