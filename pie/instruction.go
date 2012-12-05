@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"io"
+	"runtime"
 )
 
 var errRequirePairs = errors.New("argments should be pairs of regexp and replacement")
@@ -65,11 +66,14 @@ func InstructionFromArgs(args []string) (result []Instruction, err error) {
 // if any changes were made.
 func (c CompiledInstructions) Apply(input []byte) (out []byte, changed bool) {
 	out = input
-	for _, i := range c {
-		if !i.Match(out) {
+	for index, instr := range c {
+		if index%100 == 0 {
+			runtime.Gosched()
+		}
+		if !instr.Match(out) {
 			continue
 		}
-		out = i.Apply(out)
+		out = instr.Apply(out)
 		changed = true
 	}
 	return
