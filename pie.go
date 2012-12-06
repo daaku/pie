@@ -37,8 +37,10 @@ func usage() {
 
 func main() {
 	var (
-		goMaxProcs = flag.Int("gomaxprocs", runtime.NumCPU(), "gomaxprocs")
-		cpuProfile = flag.String("cpuprofile", "", "write cpu profile to this file")
+		goMaxProcs   = flag.Int("gomaxprocs", runtime.NumCPU(), "gomaxprocs")
+		ignoreRegexp = flag.String("ignore", "", "file full path ignore regexp")
+		filterRegexp = flag.String("filter", "", "file full path filter regexp")
+		cpuProfile   = flag.String("cpuprofile", "", "write cpu profile to this file")
 	)
 
 	flag.Usage = usage
@@ -67,7 +69,11 @@ func main() {
 	}
 
 	ix := index.Open(index.File())
-	r := &pie.Run{Index: ix}
+	r := &pie.Run{
+		Index:      ix,
+		FileFilter: *filterRegexp,
+		FileIgnore: *ignoreRegexp,
+	}
 	var err error
 	if argl < 2 {
 		r.Instruction, err = pie.InstructionFromReader(os.Stdin)

@@ -16,6 +16,8 @@ type Run struct {
 	Index       *index.Index
 	Instruction []Instruction
 	NumWorkers  int
+	FileFilter  string
+	FileIgnore  string
 }
 
 func (r *Run) numWorkers() int {
@@ -67,7 +69,30 @@ func (r *Run) fileWorker(files chan string) {
 		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
 	}
+
+	var fileFilterRe, fileIgnoreRe *regexp.Regexp
+	if r.FileFilter != "" {
+		fileFilterRe, err = regexp.Compile(r.FileFilter)
+		if err != nil {
+			fmt.Fprint(os.Stderr, err)
+			os.Exit(1)
+		}
+	}
+	if r.FileIgnore != "" {
+		fileIgnoreRe, err = regexp.Compile(r.FileIgnore)
+		if err != nil {
+			fmt.Fprint(os.Stderr, err)
+			os.Exit(1)
+		}
+	}
+
 	for f := range files {
+		if fileFilterRe != nil && fileFilterRe.MatchString(f, true, true) < 0 {
+			continue
+		}
+		if fileIgnoreRe != nil && fileIgnoreRe.MatchString(f, true, true) > -1 {
+			continue
+		}
 		if err = r.processFile(f, compiledInstructions); err != nil {
 			fmt.Fprint(os.Stderr, err)
 			os.Exit(1)

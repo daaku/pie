@@ -4,15 +4,16 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"github.com/daaku/pie/pie"
 	"go/build"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
+
+	"code.google.com/p/codesearch/index"
+	"github.com/daaku/pie/pie"
 )
 
 var removeTemp = flag.Bool("remove-temp", true, "remove temp copies of test data")
@@ -20,8 +21,8 @@ var removeTemp = flag.Bool("remove-temp", true, "remove temp copies of test data
 type TestCase struct {
 	Name        string
 	Instruction []pie.Instruction
-	FileIgnore  *regexp.Regexp
-	FileFilter  *regexp.Regexp
+	FileIgnore  string
+	FileFilter  string
 }
 
 var cases = []TestCase{
@@ -63,7 +64,7 @@ var cases = []TestCase{
 	},
 	TestCase{
 		Name:       "file-ignore",
-		FileIgnore: regexp.MustCompile("foo"),
+		FileIgnore: "foo",
 		Instruction: []pie.Instruction{
 			&pie.ReplaceAll{
 				Target: "hello",
@@ -73,7 +74,7 @@ var cases = []TestCase{
 	},
 	TestCase{
 		Name:       "file-filter",
-		FileFilter: regexp.MustCompile("(a|b)$"),
+		FileFilter: "(a|b)$",
 		Instruction: []pie.Instruction{
 			&pie.ReplaceAll{
 				Target: "hello",
@@ -144,8 +145,32 @@ func TestRun(t *testing.T) {
 		if err != nil {
 			t.Fatalf("faled to make temp copy for %s: %s", test.Name, err)
 		}
+
+		ixFile := filepath.Join(tmp, ".csearchindex")
+		ixw := index.Create(ixFile)
+		ixw.AddPaths([]string{tmp})
+		filepath.Walk(tmp, func(path string, info os.FileInfo, err error) error {
+			if _, elem := filepath.Split(path); elem != "" {
+				// Skip various temporary or "hidden" files or directories.
+				if elem[0] == '.' || elem[0] == '#' || elem[0] == '~' || elem[len(elem)-1] == '~' {
+					if info.IsDir() {
+						return filepath.SkipDir
+					}
+					return nil
+				}
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info != nil && info.Mode()&os.ModeType == 0 {
+				ixw.AddFile(path)
+			}
+			return nil
+		})
+		ixw.Flush()
+
 		run := &pie.Run{
-			Root:        tmp,
+			Index:       index.Open(ixFile),
 			Instruction: test.Instruction,
 			FileIgnore:  test.FileIgnore,
 			FileFilter:  test.FileFilter,
@@ -200,38 +225,5 @@ func TestInstructionFromArgsPairError(t *testing.T) {
 	_, err := pie.InstructionFromArgs([]string{"a"})
 	if err == nil {
 		t.Fatal("was expecting an error")
-	}
-}
-
-func BenchmarkBase(b *testing.B) {
-	b.StopTimer()
-	for i := 0; i < b.N; i++ {
-		test := cases[0]
-		tmp, err := test.MakeTempCopy()
-		if err != nil {
-			b.Fatalf("faled to make temp copy for %s: %s", test.Name, err)
-		}
-		run := &pie.Run{
-			Root:        tmp,
-			Instruction: test.Instruction,
-			FileIgnore:  test.FileIgnore,
-			FileFilter:  test.FileFilter,
-		}
-		b.StartTimer()
-		err = run.Run()
-		b.StopTimer()
-		if err != nil {
-			b.Fatalf("run for %s failed: %s", test.Name, err)
-		}
-		same, err := test.Compare(tmp)
-		if err != nil {
-			b.Fatalf("compare for %s failed: %s", test.Name, err)
-		}
-		if !same {
-			b.Fatalf("did not get expected result for %s", test.Name)
-		}
-		if *removeTemp {
-			os.RemoveAll(tmp)
-		}
 	}
 }
