@@ -62,7 +62,7 @@ func InstructionFromArgs(args []string) (result []Instruction, err error) {
 	return result, nil
 }
 
-// Apply the instructions and return either the new data and a bool indicating
+// Apply the instructions and return either new data and a bool indicating
 // if any changes were made.
 func (c CompiledInstructions) Apply(input []byte) (out []byte, changed bool) {
 	out = input
