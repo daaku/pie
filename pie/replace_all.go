@@ -23,6 +23,10 @@ type ReplaceAll struct {
 	Repl   []byte // replacement value
 }
 
+func (r *ReplaceAll) MatchRegexpString() string {
+	return r.Target
+}
+
 func (r *ReplaceAll) Compile() (CompiledInstruction, error) {
 	re, err := regexp.Compile(r.Target)
 	if err != nil {

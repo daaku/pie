@@ -12,6 +12,7 @@ var errRequirePairs = errors.New("argments should be pairs of regexp and replace
 // Instructions describe the modification. Instructions are compiled once for
 // parallel goroutine of execution allowing some per goroutine work.
 type Instruction interface {
+	MatchRegexpString() string
 	Compile() (CompiledInstruction, error)
 }
 

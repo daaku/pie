@@ -3,22 +3,19 @@ package pie
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
-	"path/filepath"
-	"regexp"
 	"runtime"
 	"sync"
+
+	"code.google.com/p/codesearch/index"
+	"code.google.com/p/codesearch/regexp"
 )
 
 type Run struct {
-	Root          string
-	Instruction   []Instruction
-	FileIgnore    *regexp.Regexp
-	FileFilter    *regexp.Regexp
-	NumWorkers    int
-	maxFileSize   int64
-	totalFileSize int64
-	file          []file
+	Index       *index.Index
+	Instruction []Instruction
+	NumWorkers  int
 }
 
 func (r *Run) numWorkers() int {
@@ -26,15 +23,6 @@ func (r *Run) numWorkers() int {
 		return r.NumWorkers
 	}
 	return runtime.NumCPU() * 2
-}
-
-func (r *Run) approxBatchSize() int64 {
-	const hardMin = int64(1024000) // 1mb
-	size := r.totalFileSize / int64(r.numWorkers())
-	if hardMin > size {
-		return hardMin
-	}
-	return size
 }
 
 func (r *Run) compileInstruction() (CompiledInstructions, error) {
@@ -49,79 +37,67 @@ func (r *Run) compileInstruction() (CompiledInstructions, error) {
 	return compiledInstructions, nil
 }
 
-func (r *Run) worker(files []file) {
+func (r *Run) processFile(path string, i CompiledInstructions) error {
+	buf, err := ioutil.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("error reading file %s: %s", path, err)
+	}
+
+	buf, changed := i.Apply(buf)
+	if changed {
+		info, err := os.Stat(path)
+		if err != nil {
+			return fmt.Errorf("error stat old file %s: %s", path, err)
+		}
+		err = os.Remove(path)
+		if err != nil {
+			return fmt.Errorf("error removing old file %s: %s", path, err)
+		}
+		err = ioutil.WriteFile(path, buf, info.Mode())
+		if err != nil {
+			return fmt.Errorf("error writing new file %s: %s", path, err)
+		}
+	}
+	return nil
+}
+
+func (r *Run) fileWorker(files chan string) {
 	compiledInstructions, err := r.compileInstruction()
 	if err != nil {
 		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
 	}
-	buf := make([]byte, r.maxFileSize)
-	for _, f := range files {
-		if err = f.Run(compiledInstructions, buf); err != nil {
+	for f := range files {
+		if err = r.processFile(f, compiledInstructions); err != nil {
 			fmt.Fprint(os.Stderr, err)
 			os.Exit(1)
 		}
 	}
 }
 
-func (r *Run) prepFiles() error {
-	return filepath.Walk(
-		r.Root,
-		func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if info.Name() == ".git" {
-				return filepath.SkipDir
-			}
-			if info.IsDir() {
-				return nil
-			}
-			if info.Mode()&os.ModeSymlink != 0 {
-				return nil
-			}
-			size := info.Size()
-			if size == 0 {
-				return nil
-			}
-			if r.FileIgnore != nil && r.FileIgnore.MatchString(path) {
-				return nil
-			}
-			if r.FileFilter != nil && !r.FileFilter.MatchString(path) {
-				return nil
-			}
-			if size > r.maxFileSize {
-				r.maxFileSize = size
-			}
-			r.totalFileSize += size
-			r.file = append(r.file, file{path, info})
-			return nil
-		})
-}
-
 func (r *Run) Run() error {
-	if err := r.prepFiles(); err != nil {
-		return err
+	var wg sync.WaitGroup
+	files := make(chan string, r.numWorkers()*2)
+	for i := 0; i < r.numWorkers(); i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			r.fileWorker(files)
+		}()
 	}
 
-	var wg sync.WaitGroup
-	approxBatchSize := r.approxBatchSize()
-	fileLen := len(r.file)
-	var batchSize int64
-	var start, end int
-	for end < fileLen {
-		for end < fileLen && batchSize < approxBatchSize {
-			batchSize += r.file[end].Info.Size()
-			end++
+	for _, instr := range r.Instruction {
+		re, err := regexp.Compile("(?m)" + instr.MatchRegexpString())
+		if err != nil {
+			return err
 		}
-		wg.Add(1)
-		go func(start, end int) {
-			defer wg.Done()
-			r.worker(r.file[start:end])
-		}(start, end)
-		start = end
-		batchSize = 0
+		q := index.RegexpQuery(re.Syntax)
+		post := r.Index.PostingQuery(q)
+		for _, fileid := range post {
+			files <- r.Index.Name(fileid)
+		}
 	}
+	close(files)
 	wg.Wait()
 	return nil
 }

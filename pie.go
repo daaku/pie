@@ -3,67 +3,76 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/daaku/pie/pie"
+	"log"
 	"os"
-	"regexp"
 	"runtime"
 	"runtime/pprof"
+
+	"code.google.com/p/codesearch/index"
+	"github.com/daaku/pie/pie"
 )
 
-var (
-	goMaxProcs   = flag.Int("gomaxprocs", runtime.NumCPU(), "gomaxprocs")
-	ignoreRegexp = flag.String("ignore", "", "file full path ignore regexp")
-	filterRegexp = flag.String("filter", "", "file full path filter regexp")
-	cpuprofile   = flag.String("cpuprofile", "", "write cpu profile to file")
-)
+var usageMessage = `usage: %s [<target-regexp> <replace-pattern>]...
+
+pie relies on the existence of an up-to-date index created ahead of time.
+To build or rebuild the index that pie uses, run:
+
+	cindex path...
+
+where path... is a list of directories or individual files to be included in the index.
+If no index exists, this command creates one.  If an index already exists, cindex
+overwrites it.  Run cindex -help for more.
+
+pie uses the index stored in $CSEARCHINDEX or, if that variable is unset or
+empty, $HOME/.csearchindex.
+
+Options
+`
+
+func usage() {
+	fmt.Fprintf(os.Stderr, usageMessage, os.Args[0])
+	flag.PrintDefaults()
+	os.Exit(2)
+}
 
 func main() {
-	flag.Usage = func() {
-		fmt.Fprintf(
-			os.Stderr,
-			"usage: %s <directory> [<target-regexp> <replace-pattern>]...\n",
-			os.Args[0])
-		flag.PrintDefaults()
-	}
-	flag.Parse()
+	var (
+		goMaxProcs = flag.Int("gomaxprocs", runtime.NumCPU(), "gomaxprocs")
+		cpuProfile = flag.String("cpuprofile", "", "write cpu profile to this file")
+	)
 
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
+	flag.Usage = usage
+	flag.Parse()
+	args := flag.Args()
+
+	runtime.GOMAXPROCS(*goMaxProcs)
+
+	if *cpuProfile != "" {
+		f, err := os.Create(*cpuProfile)
 		if err != nil {
-			fmt.Fprint(os.Stderr, err)
-			os.Exit(1)
+			log.Fatal(err)
 		}
+		defer f.Close()
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
 
-	runtime.GOMAXPROCS(*goMaxProcs)
-
-	args := flag.Args()
 	argl := len(args)
-	if argl%2 == 0 {
-		if argl != 1 {
+	if argl%2 == 1 {
+		if argl != 0 {
 			fmt.Fprintf(os.Stderr, "target/replace must be in pairs\n")
 		}
 		flag.Usage()
 		os.Exit(1)
 	}
 
-	r := &pie.Run{
-		Root: args[0],
-	}
-	if *ignoreRegexp != "" {
-		r.FileIgnore = regexp.MustCompile(*ignoreRegexp)
-	}
-	if *filterRegexp != "" {
-		r.FileFilter = regexp.MustCompile(*filterRegexp)
-	}
-
+	ix := index.Open(index.File())
+	r := &pie.Run{Index: ix}
 	var err error
-	if argl < 3 {
+	if argl < 2 {
 		r.Instruction, err = pie.InstructionFromReader(os.Stdin)
 	} else {
-		r.Instruction, err = pie.InstructionFromArgs(args[1:argl])
+		r.Instruction, err = pie.InstructionFromArgs(args)
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
