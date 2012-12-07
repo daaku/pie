@@ -39,6 +39,7 @@ func InstructionFromReader(r io.Reader) (result []Instruction, err error) {
 	if err != nil {
 		return nil, err
 	}
+	result = make([]Instruction, 0, len(instructions))
 	for _, instruction := range instructions {
 		result = append(result, &ReplaceAll{
 			Target: instruction[0],
@@ -54,6 +55,7 @@ func InstructionFromArgs(args []string) (result []Instruction, err error) {
 	if argl%2 != 0 {
 		return nil, errRequirePairs
 	}
+	result = make([]Instruction, 0, argl/2)
 	for x := 0; x < argl; x = x + 2 {
 		result = append(result, &ReplaceAll{
 			Target: args[x],
