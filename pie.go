@@ -35,7 +35,7 @@ func usage() {
 	os.Exit(2)
 }
 
-func main() {
+func Main() error {
 	var (
 		goMaxProcs   = flag.Int("gomaxprocs", runtime.NumCPU(), "gomaxprocs")
 		ignoreRegexp = flag.String("ignore", "", "file full path ignore regexp")
@@ -77,19 +77,25 @@ func main() {
 	var err error
 	if argl < 2 {
 		r.Instruction, err = pie.InstructionFromReader(os.Stdin)
+		if err != nil {
+			return err
+		}
 	} else {
 		r.Instruction, err = pie.InstructionFromArgs(args)
-	}
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %s\n", err)
-		os.Exit(1)
+		if err != nil {
+			return err
+		}
 	}
 	if len(r.Instruction) == 0 {
 		fmt.Fprintf(os.Stderr, "error: no instructions provided on the command line or via stdin\n")
 		flag.Usage()
 		os.Exit(1)
 	}
-	err = r.Run()
+	return r.Run()
+}
+
+func main() {
+	err := Main()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)
