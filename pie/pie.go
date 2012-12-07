@@ -63,26 +63,23 @@ func (r *Run) processFile(path string, i CompiledInstructions) error {
 	return nil
 }
 
-func (r *Run) fileWorker(files chan string) {
+func (r *Run) fileWorker(files chan string) error {
 	compiledInstructions, err := r.compileInstruction()
 	if err != nil {
-		fmt.Fprint(os.Stderr, err)
-		os.Exit(1)
+		return fmt.Errorf("failed to compile instructions: %s", err)
 	}
 
 	var fileFilterRe, fileIgnoreRe *regexp.Regexp
 	if r.FileFilter != "" {
 		fileFilterRe, err = regexp.Compile(r.FileFilter)
 		if err != nil {
-			fmt.Fprint(os.Stderr, err)
-			os.Exit(1)
+			return fmt.Errorf("failed to compile file filter regexp: %s", err)
 		}
 	}
 	if r.FileIgnore != "" {
 		fileIgnoreRe, err = regexp.Compile(r.FileIgnore)
 		if err != nil {
-			fmt.Fprint(os.Stderr, err)
-			os.Exit(1)
+			return fmt.Errorf("failed to compile file ignore regexp: %s", err)
 		}
 	}
 
@@ -94,20 +91,20 @@ func (r *Run) fileWorker(files chan string) {
 			continue
 		}
 		if err = r.processFile(f, compiledInstructions); err != nil {
-			fmt.Fprint(os.Stderr, err)
-			os.Exit(1)
+			return fmt.Errorf("failed to process file %s: %s", f, err)
 		}
 	}
+	return nil
 }
 
-func (r *Run) Run() error {
+func (r *Run) Run() (err error) {
 	var wg sync.WaitGroup
 	files := make(chan string, r.numWorkers()*2)
 	for i := 0; i < r.numWorkers(); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			r.fileWorker(files)
+			err = r.fileWorker(files)
 		}()
 	}
 
@@ -124,5 +121,5 @@ func (r *Run) Run() error {
 	}
 	close(files)
 	wg.Wait()
-	return nil
+	return
 }
