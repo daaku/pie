@@ -35,6 +35,9 @@ var cases = []TestCase{
 			},
 		},
 	},
+	TestCase{ // test case without instruction
+		Name: "empty-file",
+	},
 	TestCase{
 		Name: "empty-file",
 		Instruction: []pie.Instruction{

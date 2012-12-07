@@ -19,9 +19,9 @@ To build or rebuild the index that pie uses, run:
 
 	cindex path...
 
-where path... is a list of directories or individual files to be included in the index.
-If no index exists, this command creates one.  If an index already exists, cindex
-overwrites it.  Run cindex -help for more.
+where path... is a list of directories or individual files to be included in
+the index.  If no index exists, this command creates one.  If an index already
+exists, cindex overwrites it.  Run cindex -help for more.
 
 pie uses the index stored in $CSEARCHINDEX or, if that variable is unset or
 empty, $HOME/.csearchindex.
@@ -37,10 +37,11 @@ func usage() {
 
 func Main() error {
 	var (
-		goMaxProcs   = flag.Int("gomaxprocs", runtime.NumCPU(), "gomaxprocs")
-		ignoreRegexp = flag.String("ignore", "", "file full path ignore regexp")
-		filterRegexp = flag.String("filter", "", "file full path filter regexp")
-		cpuProfile   = flag.String("cpuprofile", "", "write cpu profile to this file")
+		goMaxProcs = flag.Int("gomaxprocs", runtime.NumCPU(), "gomaxprocs")
+		ignoreRe   = flag.String("ignore", "", "file full path ignore regexp")
+		filterRe   = flag.String("filter", "", "file full path filter regexp")
+		cpuProfile = flag.String("cpuprofile", "", "write cpu profile to this file")
+		inFile     = flag.String("input", "", "read instruction pairs from this file")
 	)
 
 	flag.Usage = usage
@@ -59,24 +60,19 @@ func Main() error {
 		defer pprof.StopCPUProfile()
 	}
 
-	argl := len(args)
-	if argl%2 == 1 {
-		if argl != 0 {
-			fmt.Fprintf(os.Stderr, "target/replace must be in pairs\n")
-		}
-		flag.Usage()
-		os.Exit(1)
-	}
-
 	ix := index.Open(index.File())
 	r := &pie.Run{
 		Index:      ix,
-		FileFilter: *filterRegexp,
-		FileIgnore: *ignoreRegexp,
+		FileFilter: *filterRe,
+		FileIgnore: *ignoreRe,
 	}
 	var err error
-	if argl < 2 {
-		r.Instruction, err = pie.InstructionFromReader(os.Stdin)
+	if *inFile != "" {
+		f, err := os.Open(*inFile)
+		if err != nil {
+			return err
+		}
+		r.Instruction, err = pie.InstructionFromReader(f)
 		if err != nil {
 			return err
 		}
@@ -87,9 +83,7 @@ func Main() error {
 		}
 	}
 	if len(r.Instruction) == 0 {
-		fmt.Fprintf(os.Stderr, "error: no instructions provided on the command line or via stdin\n")
 		flag.Usage()
-		os.Exit(1)
 	}
 	return r.Run()
 }
