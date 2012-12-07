@@ -108,6 +108,7 @@ func (r *Run) Run() (err error) {
 		}()
 	}
 
+	done := make(map[uint32]bool)
 	for _, instr := range r.Instruction {
 		re, err := regexp.Compile("(?m)" + instr.MatchRegexpString())
 		if err != nil {
@@ -116,6 +117,10 @@ func (r *Run) Run() (err error) {
 		q := index.RegexpQuery(re.Syntax)
 		post := r.Index.PostingQuery(q)
 		for _, fileid := range post {
+			if done[fileid] {
+				continue
+			}
+			done[fileid] = true
 			files <- r.Index.Name(fileid)
 		}
 	}
