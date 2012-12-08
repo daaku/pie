@@ -23,6 +23,7 @@ type TestCase struct {
 	Instruction []pie.Instruction
 	FileIgnore  string
 	FileFilter  string
+	NumWorkers  int
 }
 
 var cases = []TestCase{
@@ -82,6 +83,20 @@ var cases = []TestCase{
 			&pie.ReplaceAll{
 				Target: "hello",
 				Repl:   []byte("goodbye"),
+			},
+		},
+	},
+	TestCase{
+		Name:       "dedupe",
+		NumWorkers: 1,
+		Instruction: []pie.Instruction{
+			&pie.ReplaceAll{
+				Target: "hello",
+				Repl:   []byte("hello1"),
+			},
+			&pie.ReplaceAll{
+				Target: "hello",
+				Repl:   []byte("hello2"),
 			},
 		},
 	},
@@ -177,6 +192,7 @@ func TestRun(t *testing.T) {
 			Instruction: test.Instruction,
 			FileIgnore:  test.FileIgnore,
 			FileFilter:  test.FileFilter,
+			NumWorkers:  test.NumWorkers,
 		}
 		err = run.Run()
 		if err != nil {
