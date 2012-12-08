@@ -2,6 +2,7 @@
 package pie
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -108,21 +109,25 @@ func (r *Run) Run() (err error) {
 		}()
 	}
 
-	done := make(map[uint32]bool)
-	for _, instr := range r.Instruction {
-		re, err := regexp.Compile("(?m)" + instr.MatchRegexpString())
-		if err != nil {
-			return err
+	combined := bytes.NewBufferString("(?m)(")
+	last := len(r.Instruction) - 1
+	for i, instr := range r.Instruction {
+		combined.WriteString(instr.MatchRegexpString())
+		if i != last {
+			combined.WriteString("|")
 		}
-		q := index.RegexpQuery(re.Syntax)
-		post := r.Index.PostingQuery(q)
-		for _, fileid := range post {
-			if done[fileid] {
-				continue
-			}
-			done[fileid] = true
-			files <- r.Index.Name(fileid)
-		}
+	}
+	combined.WriteString(")")
+
+	re, err := regexp.Compile(combined.String())
+	if err != nil {
+		return fmt.Errorf(
+			"failed to parse combined regexp %s: %s", combined.String(), err)
+	}
+	q := index.RegexpQuery(re.Syntax)
+	post := r.Index.PostingQuery(q)
+	for _, fileid := range post {
+		files <- r.Index.Name(fileid)
 	}
 	close(files)
 	wg.Wait()

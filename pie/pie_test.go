@@ -100,6 +100,20 @@ var cases = []TestCase{
 			},
 		},
 	},
+	TestCase{
+		Name:       "collapse-initial-trigrams",
+		NumWorkers: 1,
+		Instruction: []pie.Instruction{
+			&pie.ReplaceAll{
+				Target: "hello",
+				Repl:   []byte("HELLO"),
+			},
+			&pie.ReplaceAll{
+				Target: "world",
+				Repl:   []byte("WORLD"),
+			},
+		},
+	},
 }
 
 func (t TestCase) dir(last string) string {
