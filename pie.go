@@ -3,28 +3,19 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"runtime"
 	"runtime/pprof"
+	"strings"
 
 	"code.google.com/p/codesearch/index"
 	"github.com/daaku/pie/pie"
 )
 
 var usageMessage = `usage: %s [<target-regexp> <replace-pattern>]...
-
-pie relies on the existence of an up-to-date index created ahead of time.
-To build or rebuild the index that pie uses, run:
-
-	cindex path...
-
-where path... is a list of directories or individual files to be included in
-the index.  If no index exists, this command creates one.  If an index already
-exists, cindex overwrites it.  Run cindex -help for more.
-
-pie uses the index stored in $CSEARCHINDEX or, if that variable is unset or
-empty, $HOME/.csearchindex.
 
 Options
 `
@@ -35,6 +26,25 @@ func usage() {
 	os.Exit(2)
 }
 
+func defaultIndexFile() string {
+	base := ""
+	if shm, err := os.Stat("/dev/shm"); err == nil && shm.IsDir() {
+		base = "/dev/shm"
+	}
+
+	f, err := ioutil.TempFile(base, "pie")
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	return f.Name()
+}
+
+func defaultRoot() string {
+	p, _ := os.Getwd()
+	return p
+}
+
 func Main() error {
 	var (
 		goMaxProcs = flag.Int("gomaxprocs", runtime.NumCPU(), "gomaxprocs")
@@ -42,6 +52,8 @@ func Main() error {
 		filterRe   = flag.String("filter", "", "file full path filter regexp")
 		cpuProfile = flag.String("cpuprofile", "", "write cpu profile to this file")
 		inFile     = flag.String("input", "", "read instruction pairs from this file")
+		indexFile  = flag.String("index", defaultIndexFile(), "default index file location")
+		roots      = flag.String("root", defaultRoot(), "comma separated target paths")
 	)
 
 	flag.Usage = usage
@@ -60,7 +72,31 @@ func Main() error {
 		defer pprof.StopCPUProfile()
 	}
 
-	ix := index.Open(index.File())
+	iw := index.Create(*indexFile)
+	for _, arg := range strings.Split(*roots, ",") {
+		filepath.Walk(arg, func(path string, info os.FileInfo, err error) error {
+			if _, elem := filepath.Split(path); elem != "" {
+				// Skip various temporary or "hidden" files or directories.
+				if elem[0] == '.' || elem[0] == '#' || elem[0] == '~' || elem[len(elem)-1] == '~' {
+					if info.IsDir() {
+						return filepath.SkipDir
+					}
+					return nil
+				}
+			}
+			if err != nil {
+				log.Printf("%s: %s", path, err)
+				return nil
+			}
+			if info != nil && info.Mode()&os.ModeType == 0 {
+				iw.AddFile(path)
+			}
+			return nil
+		})
+	}
+	iw.Flush()
+
+	ix := index.Open(*indexFile)
 	r := &pie.Run{
 		Index:      ix,
 		FileFilter: *filterRe,
