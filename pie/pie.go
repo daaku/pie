@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"runtime"
 	"sync"
@@ -19,6 +20,7 @@ type Run struct {
 	NumWorkers  int
 	FileFilter  string
 	FileIgnore  string
+	LogSkip     bool
 }
 
 func (r *Run) numWorkers() int {
@@ -86,9 +88,15 @@ func (r *Run) fileWorker(files chan string) error {
 
 	for f := range files {
 		if fileFilterRe != nil && fileFilterRe.MatchString(f, true, true) < 0 {
+			if r.LogSkip {
+				log.Printf("skipped %s because of filter", f)
+			}
 			continue
 		}
 		if fileIgnoreRe != nil && fileIgnoreRe.MatchString(f, true, true) > -1 {
+			if r.LogSkip {
+				log.Printf("skipped %s because of ignore", f)
+			}
 			continue
 		}
 		if err = r.processFile(f, compiledInstructions); err != nil {

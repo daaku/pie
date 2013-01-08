@@ -77,6 +77,7 @@ func Main() error {
 	r := &pie.Run{
 		FileFilter: *filterRe,
 		FileIgnore: *ignoreRe,
+		LogSkip:    *logSkip,
 	}
 	var err error
 	if *inFile != "" {
