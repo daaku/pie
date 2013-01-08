@@ -72,6 +72,32 @@ func Main() error {
 		defer pprof.StopCPUProfile()
 	}
 
+	// parse replacement instructions
+	r := &pie.Run{
+		FileFilter: *filterRe,
+		FileIgnore: *ignoreRe,
+	}
+	var err error
+	if *inFile != "" {
+		f, err := os.Open(*inFile)
+		if err != nil {
+			return err
+		}
+		r.Instruction, err = pie.InstructionFromReader(f)
+		if err != nil {
+			return err
+		}
+	} else {
+		r.Instruction, err = pie.InstructionFromArgs(args)
+		if err != nil {
+			return err
+		}
+	}
+	if len(r.Instruction) == 0 {
+		flag.Usage()
+	}
+
+	// make the index
 	iw := index.Create(*indexFile)
 	for _, arg := range strings.Split(*roots, ",") {
 		filepath.Walk(arg, func(path string, info os.FileInfo, err error) error {
@@ -95,32 +121,9 @@ func Main() error {
 		})
 	}
 	iw.Flush()
+	defer os.Remove(*indexFile)
+	r.Index = index.Open(*indexFile)
 
-	ix := index.Open(*indexFile)
-	r := &pie.Run{
-		Index:      ix,
-		FileFilter: *filterRe,
-		FileIgnore: *ignoreRe,
-	}
-	var err error
-	if *inFile != "" {
-		f, err := os.Open(*inFile)
-		if err != nil {
-			return err
-		}
-		r.Instruction, err = pie.InstructionFromReader(f)
-		if err != nil {
-			return err
-		}
-	} else {
-		r.Instruction, err = pie.InstructionFromArgs(args)
-		if err != nil {
-			return err
-		}
-	}
-	if len(r.Instruction) == 0 {
-		flag.Usage()
-	}
 	return r.Run()
 }
 
