@@ -54,6 +54,7 @@ func Main() error {
 		inFile     = flag.String("input", "", "read instruction pairs from this file")
 		indexFile  = flag.String("index", defaultIndexFile(), "default index file location")
 		roots      = flag.String("root", defaultRoot(), "comma separated target paths")
+		logSkip    = flag.Bool("logskip", false, "log skipped files")
 	)
 
 	flag.Usage = usage
@@ -99,11 +100,15 @@ func Main() error {
 
 	// make the index
 	iw := index.Create(*indexFile)
+	iw.LogSkip = *logSkip
 	for _, arg := range strings.Split(*roots, ",") {
 		filepath.Walk(arg, func(path string, info os.FileInfo, err error) error {
 			if _, elem := filepath.Split(path); elem != "" {
 				// Skip various temporary or "hidden" files or directories.
 				if elem[0] == '.' || elem[0] == '#' || elem[0] == '~' || elem[len(elem)-1] == '~' {
+					if *logSkip {
+						log.Printf("%s: special, ignoring\n", path)
+					}
 					if info.IsDir() {
 						return filepath.SkipDir
 					}
