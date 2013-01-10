@@ -3,81 +3,133 @@ package pie
 import (
 	"encoding/csv"
 	"errors"
+	"fmt"
 	"io"
+	"os"
+	"regexp"
 	"runtime"
 )
 
-var errRequirePairs = errors.New("argments should be pairs of regexp and replacement")
+var (
+	errRequirePairs           = errors.New("argments should be pairs of regexp and replacement")
+	errNoInstructionsProvided = errors.New("no instructions provided")
+)
 
-// Instructions describe the modification. Instructions are compiled once for
-// parallel goroutine of execution allowing some per goroutine work.
-type Instruction interface {
-	MatchRegexpString() string
-	Compile() (CompiledInstruction, error)
+type replaceAll struct {
+	Target string // regular expression string
+	Regexp *regexp.Regexp
+	Repl   []byte // replacement value
 }
 
-// A compiled instruction is used repeatedly across files.
-type CompiledInstruction interface {
-	// This is called first to avoid copying data if there is not match.
-	Match(src []byte) bool
-
-	// This applies the instruction and returns a copy of the transformed data.
-	Apply(src []byte) []byte
+// Defines rules that maps to many regexp.ReplaceAll.
+type Instruction struct {
+	replaceAll []*replaceAll
 }
 
-type CompiledInstructions []CompiledInstruction
+func (i *Instruction) compile() (err error) {
+	for _, r := range i.replaceAll {
+		if r.Regexp, err = regexp.Compile(r.Target); err != nil {
+			return err
+		}
+	}
+	return
+}
+
+func (i *Instruction) ContentMatch(content []byte) bool {
+	return true
+}
+
+// Apply the instructions and return result and a bool indicating if any
+// changes were made.
+func (i *Instruction) Transform(input []byte) (out []byte, changed bool, err error) {
+	if i == nil {
+		return nil, false, errNoInstructionsProvided
+	}
+
+	out = input
+	for index, r := range i.replaceAll {
+		if index%100 == 0 {
+			runtime.Gosched()
+		}
+		if r.Regexp == nil {
+			return nil, false, fmt.Errorf("regexp is nil")
+		}
+		if !r.Regexp.Match(out) {
+			continue
+		}
+		out = r.Regexp.ReplaceAll(out, r.Repl)
+		changed = true
+	}
+	return
+}
 
 // Parses input as tab delemited pairs of regex and replace pattern.
-func InstructionFromReader(r io.Reader) (result []Instruction, err error) {
+func InstructionFromReader(r io.Reader) (*Instruction, error) {
 	reader := csv.NewReader(r)
 	reader.Comma = '\t'
 	reader.Comment = '#'
 	reader.FieldsPerRecord = 2
 	reader.LazyQuotes = true
 	reader.TrimLeadingSpace = true
-	instructions, err := reader.ReadAll()
+	lines, err := reader.ReadAll()
 	if err != nil {
 		return nil, err
 	}
-	result = make([]Instruction, 0, len(instructions))
-	for _, instruction := range instructions {
-		result = append(result, &ReplaceAll{
-			Target: instruction[0],
-			Repl:   []byte(instruction[1]),
+	ra := make([]*replaceAll, 0, len(lines))
+	for _, line := range lines {
+		ra = append(ra, &replaceAll{
+			Target: line[0],
+			Repl:   []byte(line[1]),
 		})
 	}
-	return result, nil
+
+	if len(ra) == 0 {
+		return nil, errNoInstructionsProvided
+	}
+
+	i := &Instruction{replaceAll: ra}
+	if err := i.compile(); err != nil {
+		return nil, err
+	}
+
+	return i, nil
 }
 
 // Parses args as pairs of regex and replace pattern.
-func InstructionFromArgs(args []string) (result []Instruction, err error) {
+func InstructionFromArgs(args []string) (*Instruction, error) {
 	argl := len(args)
 	if argl%2 != 0 {
 		return nil, errRequirePairs
 	}
-	result = make([]Instruction, 0, argl/2)
+	ra := make([]*replaceAll, 0, argl/2)
 	for x := 0; x < argl; x = x + 2 {
-		result = append(result, &ReplaceAll{
+		ra = append(ra, &replaceAll{
 			Target: args[x],
 			Repl:   []byte(args[x+1]),
 		})
 	}
-	return result, nil
+
+	if len(ra) == 0 {
+		return nil, errNoInstructionsProvided
+	}
+
+	i := &Instruction{replaceAll: ra}
+	if err := i.compile(); err != nil {
+		return nil, err
+	}
+
+	return i, nil
 }
 
-// Apply the instructions and return result and a bool indicating if any
-// changes were made.
-func (c CompiledInstructions) Apply(input []byte) (out []byte, changed bool) {
-	out = input
-	for index, instr := range c {
-		if index%100 == 0 {
-			runtime.Gosched()
-		}
-		if !instr.Match(out) {
-			continue
-		}
-		out = instr.Apply(out)
-		changed = true
+// Parse instructions from the specified file.
+func InstructionFromFile(file string) (*Instruction, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, err
 	}
-	return
+	instruction, err := InstructionFromReader(f)
+	if err != nil {
+		return nil, err
+	}
+	return instruction, nil
 }
