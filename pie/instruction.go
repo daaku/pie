@@ -1,6 +1,7 @@
 package pie
 
 import (
+	"bytes"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -8,11 +9,15 @@ import (
 	"os"
 	"regexp"
 	"runtime"
+
+	"code.google.com/p/codesearch/index"
+	cre "code.google.com/p/codesearch/regexp"
 )
 
 var (
 	errRequirePairs           = errors.New("argments should be pairs of regexp and replacement")
 	errNoInstructionsProvided = errors.New("no instructions provided")
+	ErrNonUTF8                = errors.New("not utf8")
 )
 
 type replaceAll struct {
@@ -23,20 +28,32 @@ type replaceAll struct {
 
 // Defines rules that maps to many regexp.ReplaceAll.
 type Instruction struct {
-	replaceAll []*replaceAll
+	replaceAll        []*replaceAll
+	contentMatchQuery *index.Query
 }
 
 func (i *Instruction) compile() (err error) {
-	for _, r := range i.replaceAll {
+	combined := bytes.NewBufferString("(?m)(")
+	last := len(i.replaceAll) - 1
+	for n, r := range i.replaceAll {
 		if r.Regexp, err = regexp.Compile(r.Target); err != nil {
 			return err
 		}
+		combined.WriteString(r.Target)
+		if n != last {
+			combined.WriteString("|")
+		}
 	}
-	return
-}
+	combined.WriteString(")")
 
-func (i *Instruction) ContentMatch(content []byte) bool {
-	return true
+	re, err := cre.Compile(combined.String())
+	if err != nil {
+		return fmt.Errorf(
+			"failed to parse combined regexp %s: %s", combined.String(), err)
+	}
+	i.contentMatchQuery = index.RegexpQuery(re.Syntax)
+
+	return
 }
 
 // Apply the instructions and return result and a bool indicating if any
@@ -61,6 +78,103 @@ func (i *Instruction) Transform(input []byte) (out []byte, changed bool, err err
 		changed = true
 	}
 	return
+}
+
+func (i *Instruction) ContentMatch(content []byte) bool {
+	return i.contentMatch(i.contentMatchQuery, content, nil)
+}
+
+func (i *Instruction) contentMatch(q *index.Query, content []byte, contentTris map[uint32]bool) bool {
+	if q.Op == index.QNone {
+		return false
+	}
+	if q.Op == index.QAll {
+		return true
+	}
+
+	if contentTris == nil {
+		var err error
+		contentTris, err = trigramSet(content)
+		if err != nil {
+			if err == ErrNonUTF8 {
+				return false
+			}
+			panic(err)
+		}
+	}
+
+	switch q.Op {
+	case index.QAnd:
+		for _, t := range q.Trigram {
+			tri := uint32(t[0])<<16 | uint32(t[1])<<8 | uint32(t[2])
+			if !contentTris[tri] {
+				return false
+			}
+		}
+		for _, sub := range q.Sub {
+			if !i.contentMatch(sub, content, contentTris) {
+				return false
+			}
+		}
+		return true
+	case index.QOr:
+		if len(q.Trigram) > 0 {
+			found := false
+			for _, t := range q.Trigram {
+				tri := uint32(t[0])<<16 | uint32(t[1])<<8 | uint32(t[2])
+				if contentTris[tri] {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return false
+			}
+		}
+		for _, sub := range q.Sub {
+			if !i.contentMatch(sub, content, contentTris) {
+				return false
+			}
+		}
+		return true
+	}
+
+	panic(fmt.Sprintf("unknown op: %s", q.Op))
+}
+
+func trigramSet(buf []byte) (map[uint32]bool, error) {
+	var (
+		c   = byte(0)
+		tv  = uint32(0)
+		tri = make(map[uint32]bool)
+	)
+	for i := 0; i < len(buf); i++ {
+		tv = (tv << 8) & (1<<24 - 1)
+		c = buf[i]
+		tv |= uint32(c)
+		if !validUTF8((tv>>8)&0xFF, tv&0xFF) {
+			return nil, ErrNonUTF8
+		}
+		tri[tv] = true
+	}
+	return tri, nil
+}
+
+// validUTF8 reports whether the byte pair can appear in a
+// valid sequence of UTF-8-encoded code points.
+func validUTF8(c1, c2 uint32) bool {
+	switch {
+	case c1 < 0x80:
+		// 1-byte, must be followed by 1-byte or first of multi-byte
+		return c2 < 0x80 || 0xc0 <= c2 && c2 < 0xf8
+	case c1 < 0xc0:
+		// continuation byte, can be followed by nearly anything
+		return c2 < 0xf8
+	case c1 < 0xf8:
+		// first of multi-byte, must be followed by continuation byte
+		return 0x80 <= c2 && c2 < 0xc0
+	}
+	return false
 }
 
 // Parses input as tab delemited pairs of regex and replace pattern.
